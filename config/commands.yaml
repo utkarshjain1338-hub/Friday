@@ -1,0 +1,8 @@
+safe_commands:
+  open firefox: firefox
+  open code: code
+  open terminal: gnome-terminal
+  open browser: firefox
+  show battery status: upower -i $(upower -e | grep BAT) | grep -E 'state|percentage'
+  list home files: ls ~
+  show running processes: ps -e --sort=-pcpu | head -n 15

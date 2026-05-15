@@ -1,0 +1,5 @@
+assistant:
+  name: Friday
+  voice: cute_female
+  language: en-US
+  response_style: "friendly"

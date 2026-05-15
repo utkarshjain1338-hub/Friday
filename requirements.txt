@@ -1,0 +1,10 @@
+sounddevice
+numpy
+pydub
+psutil
+loguru
+pyautogui
+keyboard
+pyyaml
+requests
+pyttsx3
