@@ -1,4 +1,5 @@
 import asyncio
+import os
 import shutil
 from typing import Optional
 from .prompt_builder import build_prompt
@@ -6,7 +7,7 @@ from .prompt_builder import build_prompt
 
 class OllamaClient:
     def __init__(self, binary: Optional[str] = None, model: str = "qwen2.5:3b"):
-        self.binary = binary or shutil.which("ollama")
+        self.binary = binary or os.getenv("OLLAMA_BINARY") or shutil.which("ollama")
         self.model = model
 
     async def generate(self, prompt: str, history: list = None, memory: list = None) -> str:
@@ -25,9 +26,11 @@ class OllamaClient:
                 pass
             return resp
 
-        # stream output from ollama; emit events for chunks
         proc = await asyncio.create_subprocess_exec(
-            self.binary, "run", self.model, built,
+            self.binary,
+            "run",
+            self.model,
+            built,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -52,4 +55,6 @@ class OllamaClient:
                 pass
 
         await proc.wait()
+        if not collected:
+            return "Ollama did not return a response."
         return "\n".join(collected).strip()

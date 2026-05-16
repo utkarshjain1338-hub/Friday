@@ -9,7 +9,7 @@ class OpenWakeWord:
     """
 
     def __init__(self, binary: Optional[str] = None):
-        self.binary = binary or shutil.which("openWakeWord")
+        self.binary = binary or shutil.which("openWakeWord") or shutil.which("openwakeword")
         self._proc = None
 
     def available(self) -> bool:

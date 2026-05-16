@@ -24,6 +24,7 @@ class StreamingTranscriber:
         silence_threshold: float = 0.02,
         min_silence_duration: float = 0.5,
         whisper_binary: Optional[str] = None,
+        model: str = "tiny.en",
     ):
         """
         Initialize streaming transcriber.
@@ -34,9 +35,11 @@ class StreamingTranscriber:
             silence_threshold: RMS threshold for silence detection
             min_silence_duration: Minimum silence before ending recording
             whisper_binary: Path to whisper.cpp binary (auto-detected if None)
+            model: Whisper model name
         """
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
+        self.model = model
         self.audio_buffer = AudioBuffer(sample_rate=sample_rate)
         self.silence_detector = SilenceDetector(
             sample_rate=sample_rate,
@@ -136,24 +139,14 @@ class StreamingTranscriber:
         try:
             proc = await asyncio.create_subprocess_exec(
                 self.whisper_binary,
-                "--model-path",
-                "models/ggml-tiny.bin",
-                "--output-json",
-                wav_path,
+                str(wav_path),
+                "--model",
+                self.model,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await proc.communicate()
             if stdout:
-                import json
-
-                try:
-                    result = json.loads(stdout.decode())
-                    if "result" in result:
-                        return result["result"][0]["text"] if result["result"] else ""
-                except Exception:
-                    pass
-                # Fallback: just return stdout as text
                 return stdout.decode().strip()
             return ""
         except Exception as e:

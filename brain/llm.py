@@ -1,5 +1,6 @@
-import shutil
-import subprocess
+import os
+import asyncio
+from .ollama_client import OllamaClient
 
 
 class FridayLLM:
@@ -9,24 +10,16 @@ class FridayLLM:
             "Answer politely, help with Linux tasks, and avoid executing dangerous commands."
         )
         self.history = []
-        self.model = "qwen2.5:3b"
-        self.ollama_binary = shutil.which("ollama")
+        self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+        self.client = OllamaClient(model=self.model)
 
     def ask(self, prompt: str) -> str:
         self.history.append({"role": "user", "content": prompt})
-        if self.ollama_binary:
-            return self._request_ollama(prompt)
-        return self._fallback_response(prompt)
+        if not self.client.binary:
+            return self._fallback_response(prompt)
 
-    def _request_ollama(self, prompt: str) -> str:
         try:
-            result = subprocess.run(
-                [self.ollama_binary, "run", self.model, prompt],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return result.stdout.strip()
+            return asyncio.run(self.client.generate(prompt, history=self.history))
         except Exception:
             return self._fallback_response(prompt)
 
