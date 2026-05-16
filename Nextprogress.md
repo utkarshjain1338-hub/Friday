@@ -238,7 +238,7 @@ The assistant should:
 Support:
 
 * Friday
-* Jarvis
+* Friday
 * Computer
 
 ---

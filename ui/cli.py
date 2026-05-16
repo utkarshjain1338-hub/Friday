@@ -74,7 +74,7 @@ async def run_voice_mode():
     print("Friday voice mode is active. Type 'stop' to exit.")
     
     # Greet the user when activated to confirm it is running
-    await audio.speak("I am online. Just say 'Hey Jarvis' when you need me.")
+    await audio.speak("I am online. Just say 'Hey Friday' when you need me.")
     
     while True:
         wake = await audio.wait_for_wake_word()

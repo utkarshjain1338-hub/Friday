@@ -210,7 +210,7 @@ python main.py --voice
 ```
 
 **Voice mode features (if binaries available):**
-- Say "Friday" or "Jarvis" to activate
+- Say "Friday" to activate
 - Automatic speech-to-text with whisper.cpp
 - Voice responses with piper TTS
 - Real-time listening

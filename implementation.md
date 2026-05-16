@@ -137,7 +137,7 @@ The assistant should:
 
 Support:
 
-* Jarvis
+* Friday
 * Friday
 * Computer
 
