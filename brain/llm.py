@@ -13,13 +13,13 @@ class FridayLLM:
         self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
         self.client = OllamaClient(model=self.model)
 
-    def ask(self, prompt: str) -> str:
+    async def ask(self, prompt: str) -> str:
         self.history.append({"role": "user", "content": prompt})
         if not self.client.binary:
             return self._fallback_response(prompt)
 
         try:
-            return asyncio.run(self.client.generate(prompt, history=self.history))
+            return await self.client.generate(prompt, history=self.history)
         except Exception:
             return self._fallback_response(prompt)
 

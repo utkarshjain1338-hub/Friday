@@ -1,0 +1,44 @@
+#!/home/deku/Friday/venv/bin/python3
+import sys
+import os
+import numpy as np
+import openwakeword
+from openwakeword.model import Model
+import sounddevice as sd
+
+# Simple script to detect wake words and print to stdout
+# This mimics what the Friday assistant expects from an 'openwakeword' binary
+
+def main():
+    # Load model
+    # By default, use the 'hey jarvis' or 'friday' model if available
+    model = Model()
+    
+    # Define callback
+    def callback(indata, frames, time, status):
+        if status:
+            print(status, file=sys.stderr)
+        
+        # Get predictions
+        prediction = model.predict(indata[:, 0])
+        
+        # Check for detections
+        for mdl in prediction:
+            for kw, score in prediction[mdl].items():
+                if score > 0.5:
+                    print(f"Detected {kw} with score {score:.2f}")
+                    sys.stdout.flush()
+
+    # Start streaming
+    with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280):
+        while True:
+            sd.sleep(1000)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

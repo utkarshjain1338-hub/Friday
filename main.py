@@ -1,5 +1,13 @@
 import argparse
 import asyncio
+import os
+import sys
+from pathlib import Path
+
+# Add local bin to PATH
+local_bin = Path(__file__).parent / "bin"
+os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
+
 from ui.cli import run_cli, run_voice_mode
 
 

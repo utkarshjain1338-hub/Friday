@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 logs/
 .env
+third_party/
+bin/piper
+bin/whisper-cli
+bin/lib*
+*.db

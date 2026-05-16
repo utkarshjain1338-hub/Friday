@@ -1,0 +1,54 @@
+#!/home/deku/Friday/venv/bin/python3
+import sys
+import subprocess
+import os
+
+# Wrapper for whisper.cpp to match the Friday assistant CLI expectations
+# stt_engine.py calls: binary audio_path --model model_name
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit(0)
+
+    audio_path = sys.argv[1]
+    model_name = "tiny.en"
+    
+    if "--model" in sys.argv:
+        idx = sys.argv.index("--model")
+        if idx + 1 < len(sys.argv):
+            model_name = sys.argv[idx + 1]
+
+    # Map model name to path
+    # Assuming the script is in /home/deku/Friday/bin/
+    bin_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(bin_dir)
+    model_path = os.path.join(project_root, f"third_party/whisper.cpp/models/ggml-{model_name}.bin")
+    
+    if not os.path.exists(model_path):
+        # Fallback to tiny.en
+        model_path = os.path.join(project_root, "third_party/whisper.cpp/models/ggml-tiny.en.bin")
+
+    cli_path = os.path.join(bin_dir, "whisper-cli")
+    
+    if not os.path.exists(cli_path):
+        print(f"Error: whisper-cli not found at {cli_path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Run whisper-cli
+    # -nt: no timestamps
+    # -np: no prints (only results)
+    cmd = [cli_path, "-f", audio_path, "-m", model_path, "-nt", "-np"]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode == 0:
+        # Print only the transcribed text
+        print(result.stdout.strip())
+    else:
+        # On error, don't print anything to stdout to avoid confusing the caller
+        # but print to stderr for debugging
+        print(f"Error: {result.stderr}", file=sys.stderr)
+        sys.exit(result.returncode)
+
+if __name__ == "__main__":
+    main()

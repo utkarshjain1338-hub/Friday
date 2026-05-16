@@ -4,6 +4,13 @@
 import asyncio
 import shutil
 import sys
+import os
+from pathlib import Path
+
+# Add local bin to PATH
+local_bin = Path(__file__).parent / "bin"
+os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
+
 from pathlib import Path
 
 
@@ -125,7 +132,7 @@ async def test_llm_response():
         llm = FridayLLM()
         print("\nQuery: 'What can you do?'")
         print("Waiting for response...")
-        response = llm.ask("What can you do?")
+        response = await llm.ask("What can you do?")
         print(f"\nResponse:\n{response}")
     except Exception as e:
         print(f"Error: {e}")

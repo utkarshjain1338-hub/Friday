@@ -135,8 +135,7 @@ class FridayRouter:
             return await asyncio.to_thread(list_processes)
 
         if any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell"]):
-            # llm.ask may call external process; run in thread
-            return await asyncio.to_thread(self.llm.ask, text)
+            return await self.llm.ask(text)
 
         return (
             "I did not understand that yet. Try a safe command like 'open firefox', 'show battery status', "
