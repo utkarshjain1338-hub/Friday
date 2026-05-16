@@ -1,10 +1,22 @@
-sounddevice
-numpy
-pydub
-psutil
-loguru
-pyautogui
-keyboard
-pyyaml
-requests
-pyttsx3
+sounddevice>=0.4.6
+numpy>=1.24.3
+pydub>=0.25.1
+psutil>=5.9.6
+loguru>=0.7.2
+pyautogui>=0.9.53
+keyboard>=0.13.5
+pyyaml>=6.0.1
+requests>=2.31.0
+pyttsx3>=2.90
+
+# Optional but recommended for full features
+rich>=13.6.0
+scipy>=1.11.3
+
+# For wake word and TTS (install separately if needed)
+# openwakeword>=0.5.0
+# piper-tts>=2023.11.14
+
+# Development/Testing
+pytest>=7.4.3
+pytest-asyncio>=0.21.1

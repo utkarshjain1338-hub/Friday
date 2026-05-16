@@ -1,0 +1,6 @@
+WAKE_WORD_DETECTED = "wake_word_detected"
+TRANSCRIPTION_COMPLETED = "transcription_completed"
+AI_RESPONSE_GENERATED = "ai_response_generated"
+SPEECH_STARTED = "speech_started"
+SPEECH_FINISHED = "speech_finished"
+COMMAND_EXECUTED = "command_executed"

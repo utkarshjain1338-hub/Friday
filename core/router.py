@@ -22,12 +22,24 @@ from automation.browser_controller import (
 )
 from brain.llm import FridayLLM
 from loguru import logger
+import asyncio
+from skills.registry import SkillRegistry
+from skills.loader import discover_plugins
+from security.validator import assess_command_risk, requires_confirmation
+from security.permission_manager import PermissionManager
 
 
 class FridayRouter:
     def __init__(self):
         self.config = self._load_config()
         self.llm = FridayLLM()
+        # plugin registry
+        self.registry = SkillRegistry()
+        try:
+            discover_plugins(self.registry)
+        except Exception:
+            logger.warning("Failed to discover plugins")
+        self.permission_manager = PermissionManager()
         logger.info("Router initialized with config.")
 
     def _load_config(self):
@@ -35,70 +47,96 @@ class FridayRouter:
         with open(path, "r", encoding="utf-8") as handle:
             return yaml.safe_load(handle)
 
-    def route(self, text: str) -> str:
+    async def route(self, text: str) -> str:
         normalized = text.lower().strip()
+        # plugin skills first
+        try:
+            matches = self.registry.find_for_command(normalized)
+            if matches:
+                # execute first matching skill
+                skill = matches[0]
+                try:
+                    result = await skill.execute(text, {"text": text})
+                    return result
+                except Exception as exc:
+                    logger.exception("Skill execution failed: %s", exc)
+                    return "Skill execution failed."
+        except Exception:
+            pass
         safe_commands = self.config.get("safe_commands", {})
 
         if normalized in safe_commands:
             command = safe_commands[normalized]
-            return execute_safe_command(normalized, command)
+            # execute_safe_command is synchronous; run in thread
+            # check risk
+            risk, reason = assess_command_risk(command)
+            if requires_confirmation(risk) and not self.permission_manager.is_granted(command):
+                # interactive confirmation required
+                loop = asyncio.get_running_loop()
+                confirm = await loop.run_in_executor(None, input, f"Confirm execution of '{command}'? (yes/no): ")
+                if confirm.strip().lower() != "yes":
+                    return "Command cancelled by user."
+                self.permission_manager.grant(command)
+
+            return await asyncio.to_thread(execute_safe_command, normalized, command)
 
         if "open firefox" in normalized or "launch firefox" in normalized:
-            return open_application("firefox")
+            return await asyncio.to_thread(open_application, "firefox")
 
         if "open code" in normalized or "launch vscode" in normalized or "launch code" in normalized:
-            return open_application("code")
+            return await asyncio.to_thread(open_application, "code")
 
         if "open terminal" in normalized or "launch terminal" in normalized:
-            return open_application("terminal")
+            return await asyncio.to_thread(open_application, "terminal")
 
         if "open browser" in normalized or "open website" in normalized:
             target = self._extract_parameter(normalized, "open website") or self._extract_parameter(normalized, "open browser")
-            return open_website(target or "https://www.google.com")
+            return await asyncio.to_thread(open_website, target or "https://www.google.com")
 
         if "search google" in normalized:
             query = self._extract_parameter(normalized, "search google")
-            return search_google(query)
+            return await asyncio.to_thread(search_google, query)
 
         if "youtube" in normalized:
             if "search" in normalized:
                 query = self._extract_parameter(normalized, "search youtube")
-                return open_youtube(query)
-            return open_youtube()
+                return await asyncio.to_thread(open_youtube, query)
+            return await asyncio.to_thread(open_youtube)
 
         if "battery" in normalized or "cpu" in normalized or "memory" in normalized or "system report" in normalized:
-            return get_system_report()
+            return await asyncio.to_thread(get_system_report)
 
         if "list home files" in normalized or "show home files" in normalized:
-            return list_home()
+            return await asyncio.to_thread(list_home)
 
         if "search file" in normalized or "find file" in normalized:
             query = self._extract_parameter(normalized, "search file") or self._extract_parameter(normalized, "find file")
-            return search_files(query)
+            return await asyncio.to_thread(search_files, query)
 
         if "create folder" in normalized or "make folder" in normalized:
             target = self._extract_parameter(normalized, "create folder") or self._extract_parameter(normalized, "make folder")
-            return create_folder(target)
+            return await asyncio.to_thread(create_folder, target)
 
         if "move file" in normalized and " to " in normalized:
             source, target = normalized.split(" to ", 1)
             source = source.replace("move file", "", 1).strip()
             target = target.strip()
-            return move_file(source, target)
+            return await asyncio.to_thread(move_file, source, target)
 
         if "delete" in normalized or "remove" in normalized:
             target = self._extract_parameter(normalized, "delete") or self._extract_parameter(normalized, "remove")
-            return delete_path(target)
+            return await asyncio.to_thread(delete_path, target)
 
         if "close" in normalized or "kill" in normalized:
             target = self._extract_parameter(normalized, "close") or self._extract_parameter(normalized, "kill")
-            return kill_process(target)
+            return await asyncio.to_thread(kill_process, target)
 
         if "list processes" in normalized or "running processes" in normalized:
-            return list_processes()
+            return await asyncio.to_thread(list_processes)
 
         if any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell"]):
-            return self.llm.ask(text)
+            # llm.ask may call external process; run in thread
+            return await asyncio.to_thread(self.llm.ask, text)
 
         return (
             "I did not understand that yet. Try a safe command like 'open firefox', 'show battery status', "

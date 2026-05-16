@@ -1,0 +1,13 @@
+[Unit]
+Description=Friday Offline Assistant
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/Friday
+ExecStart=/home/%i/Friday/venv/bin/python /home/%i/Friday/main.py --voice
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

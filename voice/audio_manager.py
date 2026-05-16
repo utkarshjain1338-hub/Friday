@@ -1,25 +1,28 @@
 import logging
-from .tts import TextToSpeech
+import asyncio
+from .tts_engine import TTSEngine
 from .microphone import Microphone
-from .stt import SpeechToText
-from .wakeword import WakeWordEngine
+from .stt_engine import STTEngine
+from .wakeword_manager import WakeWordManager
+from .transcription_manager import TranscriptionManager
 
 
 class AudioManager:
     def __init__(self, voice_name: str = "female", record_duration: float = 5.0):
-        self.tts = TextToSpeech(voice_name=voice_name)
+        self.tts = TTSEngine()
         self.mic = Microphone()
-        self.stt = SpeechToText()
-        self.wakeword = WakeWordEngine()
+        self.stt = STTEngine()
+        self.wakeword = WakeWordManager()
+        self.transcription_manager = TranscriptionManager()
         self.record_duration = record_duration
         logging.debug("AudioManager initialized with voice=%s duration=%s", voice_name, record_duration)
 
-    def speak(self, text: str):
-        self.tts.speak(text)
+    async def speak(self, text: str):
+        await self.tts.speak(text)
 
-    def listen(self) -> str:
-        audio_path = self.mic.record(self.record_duration, output_path="friday_input.wav")
-        return self.stt.transcribe(audio_path)
+    async def listen(self) -> str:
+        # Use TranscriptionManager to record until silence and transcribe incrementally
+        return await self.transcription_manager.transcribe_until_silence(max_seconds=self.record_duration)
 
-    def wait_for_wake_word(self) -> bool:
-        return self.wakeword.wait_for_wake_word()
+    async def wait_for_wake_word(self) -> bool:
+        return await self.wakeword.wait_for_wake_word()
