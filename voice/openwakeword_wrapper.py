@@ -1,4 +1,5 @@
 import asyncio
+import os
 import shutil
 from typing import Optional, Callable
 
@@ -14,12 +15,12 @@ class OpenWakeWord:
             from pathlib import Path
             project_root = Path(__file__).parent.parent
             local_bin = project_root / "bin" / "openwakeword"
-            if local_bin.exists():
+            if local_bin.exists() and os.access(local_bin, os.X_OK):
                 self.binary = str(local_bin)
         self._proc = None
 
     def available(self) -> bool:
-        return bool(self.binary)
+        return bool(self.binary and os.access(self.binary, os.X_OK))
 
     async def run(self, on_detect: Callable[[str], None]):
         if not self.binary:

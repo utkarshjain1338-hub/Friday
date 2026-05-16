@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+from loguru import logger
 
 from voice.openwakeword_wrapper import OpenWakeWord
 from voice.stt_engine import STTEngine
@@ -31,7 +32,10 @@ class WakeWordManager:
 
     async def wait_for_wake_word(self) -> bool:
         if self.open_wakeword.available():
-            return await self._wait_for_open_wakeword()
+            detected = await self._wait_for_open_wakeword()
+            if detected:
+                return True
+            logger.warning("openWakeWord failed or timed out, falling back to STT wake word detection")
         return await self._wait_for_stt_wake_word()
 
     async def _wait_for_open_wakeword(self) -> bool:
@@ -44,14 +48,37 @@ class WakeWordManager:
 
         task = asyncio.create_task(self.open_wakeword.run(on_detect))
         try:
-            await detected.wait()
-            phrase = phrase_holder.get("phrase") or ""
-            if phrase:
-                try:
-                    await bus.emit(WAKE_WORD_DETECTED, {"phrase": phrase, "source": "openWakeWord"})
-                except Exception:
-                    pass
-                return True
+            # Wait until the process starts or fails
+            while self.open_wakeword._proc is None and not task.done():
+                await asyncio.sleep(0.01)
+
+            if self.open_wakeword._proc is None:
+                logger.warning("openWakeWord did not start correctly")
+                return False
+
+            wait_task = asyncio.create_task(detected.wait())
+            proc_task = asyncio.create_task(self.open_wakeword._proc.wait())
+            done, pending = await asyncio.wait(
+                {wait_task, proc_task},
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=15.0,
+            )
+
+            if wait_task in done and detected.is_set():
+                phrase = phrase_holder.get("phrase") or ""
+                if phrase:
+                    try:
+                        await bus.emit(WAKE_WORD_DETECTED, {"phrase": phrase, "source": "openWakeWord"})
+                    except Exception:
+                        pass
+                    return True
+                return False
+
+            if proc_task in done:
+                logger.warning("openWakeWord process exited before detecting a wake word")
+                return False
+
+            logger.warning("openWakeWord timed out waiting for a wake word")
             return False
         finally:
             self.open_wakeword.stop()
