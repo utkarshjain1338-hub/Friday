@@ -18,6 +18,10 @@ def main():
     def callback(indata, frames, time, status):
         if status:
             print(status, file=sys.stderr)
+            
+        vol = np.linalg.norm(indata)*10
+        if vol > 5.0:
+            print(f"DEBUG: Mic volume {vol:.2f}", file=sys.stderr)
         
         # Get predictions
         # Model.predict returns a dictionary of {model_name: score}

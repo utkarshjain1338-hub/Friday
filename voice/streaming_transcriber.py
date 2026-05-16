@@ -50,10 +50,22 @@ class StreamingTranscriber:
         self.is_recording = False
 
     def _find_whisper(self) -> Optional[str]:
-        """Find whisper.cpp binary on PATH."""
+        """Find whisper.cpp binary on PATH or local bin directory."""
         import shutil
+        from pathlib import Path
 
-        return shutil.which("whisper.cpp") or shutil.which("whisper")
+        # Check system PATH
+        binary = shutil.which("whisper.cpp") or shutil.which("whisper")
+        if binary:
+            return binary
+            
+        # Check local bin directory
+        project_root = Path(__file__).parent.parent
+        local_bin = project_root / "bin" / "whisper"
+        if local_bin.exists():
+            return str(local_bin)
+            
+        return None
 
     async def transcribe_stream(
         self, audio_generator: AsyncGenerator, on_partial: Optional[Callable] = None

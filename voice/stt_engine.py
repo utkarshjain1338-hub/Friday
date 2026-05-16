@@ -3,12 +3,14 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
+from loguru import logger
 
 
 class STTEngine:
     def __init__(self, whisper_binary: str = None, model: str = "tiny.en"):
         self.whisper_binary = whisper_binary or shutil.which("whisper.cpp") or shutil.which("whisper")
         if not self.whisper_binary:
+            silence_threshold: float = 0.005
             project_root = Path(__file__).parent.parent
             local_bin = project_root / "bin" / "whisper"
             if local_bin.exists():
@@ -25,7 +27,10 @@ class STTEngine:
             )
             stdout, stderr = await proc.communicate()
             if stdout:
-                return stdout.decode().strip()
+                text = stdout.decode().strip()
+                from loguru import logger
+                logger.debug(f"STT Result: {text}")
+                return text
         # fallback to asking the user
         loop = asyncio.get_running_loop()
         transcription = await loop.run_in_executor(None, input, "Transcription fallback - type your transcription: ")
