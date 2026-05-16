@@ -50,7 +50,7 @@ class StreamingTranscriber:
         """Find whisper.cpp binary on PATH."""
         import shutil
 
-        return shutil.which("whisper")
+        return shutil.which("whisper.cpp") or shutil.which("whisper")
 
     async def transcribe_stream(
         self, audio_generator: AsyncGenerator, on_partial: Optional[Callable] = None

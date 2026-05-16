@@ -8,7 +8,7 @@ class MemoryRetrieval:
         self.path = Path(db_path or Path.cwd() / "friday_memory.db")
 
     def search_notes(self, query: str, limit: int = 10) -> List[Tuple]:
-        conn = sqlite3.connect(self.path)
+        conn = sqlite3.connect(self.path, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT category, content, created_at FROM memory WHERE content LIKE ? ORDER BY created_at DESC LIMIT ?",

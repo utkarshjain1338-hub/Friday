@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import tempfile
 import wave
 from pathlib import Path
@@ -6,43 +7,70 @@ from pathlib import Path
 import numpy as np
 import sounddevice as sd
 
+from voice.openwakeword_wrapper import OpenWakeWord
 from voice.stt_engine import STTEngine
 from core.bus import bus
 from core.events import WAKE_WORD_DETECTED
 
 
 class WakeWordManager:
-    """Detect wake words using simple energy threshold + STT verification.
+    """Detect wake words using real wake-word or software fallback.
 
-    This is a pragmatic integration that uses the microphone stream and the
-    STT engine (whisper.cpp if available) to verify whether spoken audio
-    contains a wake word. Replace with `openWakeWord` integration for
-    a production-ready low-latency engine.
+    The manager uses openWakeWord when available for low-latency detection.
+    Otherwise, it falls back to a simple audio + speech transcription loop.
     """
 
     def __init__(self, wake_words=None, sample_rate: int = 16000):
-        self.wake_words = [w.lower() for w in (wake_words or ["hey friday", "friday", "computer"]) ]
+        self.wake_words = [w.lower() for w in (wake_words or ["hey friday", "friday", "computer"])]
         self.sample_rate = sample_rate
         self.stt = STTEngine()
+        self.open_wakeword = OpenWakeWord()
         self.chunk_duration = 1.0
         self.verify_duration = 3.0
         self.rms_threshold = 0.01
 
     async def wait_for_wake_word(self) -> bool:
+        if self.open_wakeword.available():
+            return await self._wait_for_open_wakeword()
+        return await self._wait_for_stt_wake_word()
+
+    async def _wait_for_open_wakeword(self) -> bool:
+        detected = asyncio.Event()
+        phrase_holder = {"phrase": None}
+
+        def on_detect(text: str):
+            phrase_holder["phrase"] = text.strip().lower()
+            detected.set()
+
+        task = asyncio.create_task(self.open_wakeword.run(on_detect))
+        try:
+            await detected.wait()
+            phrase = phrase_holder.get("phrase") or ""
+            if phrase:
+                try:
+                    await bus.emit(WAKE_WORD_DETECTED, {"phrase": phrase, "source": "openWakeWord"})
+                except Exception:
+                    pass
+                return True
+            return False
+        finally:
+            self.open_wakeword.stop()
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    async def _wait_for_stt_wake_word(self) -> bool:
         loop = asyncio.get_running_loop()
         while True:
-            # record short chunk
             data = await loop.run_in_executor(None, self._record_blocking, self.chunk_duration)
             rms = self._rms(data)
             if rms < self.rms_threshold:
                 continue
 
-            # potential speech detected; record a longer verification clip
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
 
             await loop.run_in_executor(None, self._record_to_wav, self.verify_duration, str(tmp_path))
-            # transcribe and check for wake word
             transcription = await self.stt.transcribe_file(str(tmp_path))
             try:
                 tmp_path.unlink()
@@ -55,7 +83,6 @@ class WakeWordManager:
             text = transcription.lower()
             for w in self.wake_words:
                 if w in text:
-                    # emit event
                     try:
                         await bus.emit(WAKE_WORD_DETECTED, {"phrase": w, "transcription": transcription})
                     except Exception:
@@ -82,6 +109,5 @@ class WakeWordManager:
         data = np.asarray(frames, dtype=np.int16).astype(np.float32)
         if data.size == 0:
             return 0.0
-        # normalize int16 to [-1,1]
         data = data / 32768.0
         return float(np.sqrt(np.mean(data * data)))
