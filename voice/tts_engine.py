@@ -6,7 +6,7 @@ import logging
 
 
 class TTSEngine:
-    def __init__(self, piper_binary: str = None, fallback=True, preferred_voice: str = "female", rate: int = 150, volume: float = 0.9):
+    def __init__(self, piper_binary: str = None, fallback=True, preferred_voice: str = "female", rate: int = 150, volume: float = 0.9, default_piper_voice: str = "cori-high"):
         """Text-to-speech engine.
 
         - Prefers `piper` if available (CLI invocation).
@@ -17,10 +17,12 @@ class TTSEngine:
             preferred_voice: keyword to prefer when selecting a voice (e.g. 'female')
             rate: speaking rate for pyttsx3 (lower is slower)
             volume: volume for pyttsx3 (0.0 - 1.0)
+            default_piper_voice: preferred piper voice when available
         """
         self.piper_binary = piper_binary or shutil.which("piper")
         self.fallback = fallback
         self.preferred_voice = preferred_voice or "female"
+        self.default_piper_voice = default_piper_voice
         self.rate = rate
         self.volume = volume
         self._pytt_engine = None
@@ -78,7 +80,7 @@ class TTSEngine:
         if self.piper_binary:
             loop = asyncio.get_running_loop()
 
-            piper_voice = voice or os.getenv("PIPER_VOICE")
+            piper_voice = voice or os.getenv("PIPER_VOICE") or self.default_piper_voice
 
             def _run():
                 try:

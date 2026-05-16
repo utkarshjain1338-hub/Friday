@@ -21,6 +21,10 @@ from automation.browser_controller import (
     search_google,
 )
 from brain.llm import FridayLLM
+from brain.reasoning_agent import ReasoningAgent
+from brain.memory_reasoning_engine import MemoryReasoningEngine
+from memory.enhanced_memory import EnhancedMemoryDatabase
+from tools.tool_loader import create_tool_system
 from loguru import logger
 import asyncio
 from skills.registry import SkillRegistry
@@ -32,7 +36,35 @@ from security.permission_manager import PermissionManager
 class FridayRouter:
     def __init__(self):
         self.config = self._load_config()
-        self.llm = FridayLLM()
+        
+        # Initialize enhanced memory system
+        try:
+            self.memory_db = EnhancedMemoryDatabase()
+            self.memory_engine = MemoryReasoningEngine(self.memory_db)
+            logger.info("Enhanced memory system initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize memory system: {e}")
+            self.memory_db = None
+            self.memory_engine = None
+        
+        # Initialize tool system
+        try:
+            self.tool_registry, self.tool_orchestrator = create_tool_system()
+            logger.info(f"Loaded {len(self.tool_registry.list_tools())} tools")
+        except Exception as e:
+            logger.error(f"Failed to initialize tool system: {e}")
+            self.tool_registry = None
+            self.tool_orchestrator = None
+        
+        # Initialize LLM with tool registry
+        self.llm = FridayLLM(tool_registry=self.tool_registry)
+        
+        # Initialize reasoning agent
+        if self.tool_orchestrator:
+            self.reasoning_agent = ReasoningAgent(self.llm, self.tool_orchestrator)
+        else:
+            self.reasoning_agent = None
+        
         # plugin registry
         self.registry = SkillRegistry()
         try:
@@ -40,7 +72,7 @@ class FridayRouter:
         except Exception:
             logger.warning("Failed to discover plugins")
         self.permission_manager = PermissionManager()
-        logger.info("Router initialized with config.")
+        logger.info("Router initialized with config, tool system, and enhanced memory.")
 
     def _load_config(self):
         path = Path(__file__).parent.parent / "config" / "commands.yaml"
@@ -49,6 +81,7 @@ class FridayRouter:
 
     async def route(self, text: str) -> str:
         normalized = text.lower().strip()
+        
         # plugin skills first
         try:
             matches = self.registry.find_for_command(normalized)
@@ -134,6 +167,16 @@ class FridayRouter:
         if "list processes" in normalized or "running processes" in normalized:
             return await asyncio.to_thread(list_processes)
 
+        # For complex requests, use reasoning agent with tool calling
+        if self.reasoning_agent and any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell", "can you", "could you", "please"]):
+            try:
+                logger.info("Using reasoning agent for complex request")
+                return await self.reasoning_agent.reason_and_act(text)
+            except Exception as e:
+                logger.error(f"Reasoning agent failed: {e}")
+                return await self.llm.ask(text)
+        
+        # Fallback to LLM for unclear requests
         if any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell"]):
             return await self.llm.ask(text)
 
