@@ -20,14 +20,20 @@ def main():
             print(status, file=sys.stderr)
         
         # Get predictions
+        # Model.predict returns a dictionary of {model_name: score}
         prediction = model.predict(indata[:, 0])
         
         # Check for detections
-        for mdl in prediction:
-            for kw, score in prediction[mdl].items():
-                if score > 0.5:
-                    print(f"Detected {kw} with score {score:.2f}")
-                    sys.stdout.flush()
+        for kw, score in prediction.items():
+            if score > 0.5:
+                print(f"Detected {kw} with score {score:.2f}")
+                sys.stdout.flush()
+            # Diagnostic: if it's borderline, print to stderr so we can see it in debug logs without triggering the wake
+            elif score > 0.1:
+                print(f"DEBUG: Heard '{kw}' at score {score:.2f}", file=sys.stderr)
+
+    # Print device info to stderr
+    print(f"Using default audio device. Available devices:\n{sd.query_devices()}", file=sys.stderr)
 
     # Start streaming
     with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280):

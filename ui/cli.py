@@ -1,6 +1,26 @@
 from core.assistant import FridayAssistant
 from voice.audio_manager import AudioManager
 import asyncio
+import datetime
+import urllib.request
+import re
+
+async def get_greeting():
+    def _fetch():
+        time_str = datetime.datetime.now().strftime("%I:%M %p")
+        greeting = f"I am listening. It is {time_str}."
+        try:
+            req = urllib.request.Request("https://wttr.in/?format=1", headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=2) as response:
+                weather_str = response.read().decode('utf-8').strip()
+                weather_text = re.sub(r'[^\x00-\x7F]+', '', weather_str).strip()
+                if weather_text:
+                    weather_text = weather_text.replace('+', '').replace('C', ' Celsius').replace('F', ' Fahrenheit')
+                    greeting += f" The weather is {weather_text}."
+        except Exception:
+            pass
+        greeting += " How can I help you?"
+        return greeting
 
 
 def print_help():
@@ -52,6 +72,10 @@ async def run_voice_mode():
     audio = AudioManager()
 
     print("Friday voice mode is active. Type 'stop' to exit.")
+    
+    # Greet the user when activated to confirm it is running
+    await audio.speak("I am online. Just say 'Hey Jarvis' when you need me.")
+    
     while True:
         wake = await audio.wait_for_wake_word()
         if not wake:
@@ -59,6 +83,10 @@ async def run_voice_mode():
             continue
 
         print("Wake word detected, listening...")
+        greeting = await get_greeting()
+        print(f"Assistant: {greeting}")
+        await audio.speak(greeting)
+        
         command = await audio.listen()
         if not command:
             continue

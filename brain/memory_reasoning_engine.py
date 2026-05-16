@@ -6,7 +6,7 @@ Uses multiple memory types for context-aware intelligent reasoning
 from typing import Any, Dict, List, Optional, Set, Tuple
 from loguru import logger
 from datetime import datetime, timedelta
-from .enhanced_memory import EnhancedMemoryDatabase
+from memory.enhanced_memory import EnhancedMemoryDatabase
 import json
 
 

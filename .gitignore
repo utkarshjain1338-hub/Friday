@@ -8,3 +8,4 @@ bin/piper
 bin/whisper-cli
 bin/lib*
 *.db
+voices/*.onnx

@@ -10,8 +10,8 @@ class OllamaClient:
         self.binary = binary or os.getenv("OLLAMA_BINARY") or shutil.which("ollama")
         self.model = model
 
-    async def generate(self, prompt: str, history: list = None, memory: list = None) -> str:
-        system_prompt = "You are Friday, a helpful Linux assistant. Respond concisely and safely."
+    async def generate(self, prompt: str, history: list = None, memory: list = None, system: str = None) -> str:
+        system_prompt = system or "You are Friday, a helpful Linux assistant. Respond concisely and safely."
         built = build_prompt(system_prompt, history or [], memory or [], prompt)
 
         if not self.binary:

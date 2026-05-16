@@ -2,11 +2,17 @@ import asyncio
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
 class STTEngine:
     def __init__(self, whisper_binary: str = None, model: str = "tiny.en"):
         self.whisper_binary = whisper_binary or shutil.which("whisper.cpp") or shutil.which("whisper")
+        if not self.whisper_binary:
+            project_root = Path(__file__).parent.parent
+            local_bin = project_root / "bin" / "whisper"
+            if local_bin.exists():
+                self.whisper_binary = str(local_bin)
         self.model = model
 
     async def transcribe_file(self, audio_path: str) -> str:

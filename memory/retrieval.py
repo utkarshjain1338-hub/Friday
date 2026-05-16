@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 
-class MemoryRetrieval:
+class MemoryRetriever:
     def __init__(self, db_path: Path = None):
         self.path = Path(db_path or Path.cwd() / "friday_memory.db")
 

@@ -10,6 +10,12 @@ class OpenWakeWord:
 
     def __init__(self, binary: Optional[str] = None):
         self.binary = binary or shutil.which("openWakeWord") or shutil.which("openwakeword")
+        if not self.binary:
+            from pathlib import Path
+            project_root = Path(__file__).parent.parent
+            local_bin = project_root / "bin" / "openwakeword"
+            if local_bin.exists():
+                self.binary = str(local_bin)
         self._proc = None
 
     def available(self) -> bool:
@@ -19,11 +25,25 @@ class OpenWakeWord:
         if not self.binary:
             raise RuntimeError("openWakeWord binary not available")
 
+        from loguru import logger
+        logger.debug(f"Starting OpenWakeWord binary: {self.binary}")
+
         self._proc = await asyncio.create_subprocess_exec(
             self.binary,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+
+        async def _read_stderr():
+            while True:
+                line = await self._proc.stderr.readline()
+                if not line:
+                    break
+                text = line.decode().strip()
+                if text:
+                    logger.debug(f"OpenWakeWord [STDERR]: {text}")
+
+        asyncio.create_task(_read_stderr())
 
         # read lines and call on_detect when a keyword line appears
         assert self._proc.stdout
@@ -33,6 +53,7 @@ class OpenWakeWord:
                 break
             text = line.decode().strip()
             if text:
+                logger.debug(f"OpenWakeWord output: {text}")
                 on_detect(text)
 
     def stop(self):

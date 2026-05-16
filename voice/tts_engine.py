@@ -2,7 +2,7 @@ import asyncio
 import os
 import shutil
 import subprocess
-import logging
+from loguru import logger
 
 
 class TTSEngine:
@@ -27,6 +27,16 @@ class TTSEngine:
         self.volume = volume
         self._pytt_engine = None
         self._proc = None
+        
+        # Determine project root and library paths
+        self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.piper_lib_path = os.path.join(self.project_root, "third_party", "piper")
+        self.piper_models_dir = os.path.join(self.project_root, "voices")
+
+        if not self.piper_binary:
+            local_piper = os.path.join(self.project_root, "bin", "piper")
+            if os.path.exists(local_piper):
+                self.piper_binary = local_piper
 
         if self.fallback:
             try:
@@ -76,28 +86,73 @@ class TTSEngine:
                 logging.warning("pyttsx3 not available: %s", exc)
 
     async def speak(self, text: str, voice: str = None):
-        # Prefer piper if available. If `PIPER_VOICE` env var is set we try to pass it.
+        """Speak text using Piper or fallback to pyttsx3."""
+        
+        # 1. Try Piper if available and looks configured
         if self.piper_binary:
-            loop = asyncio.get_running_loop()
-
             piper_voice = voice or os.getenv("PIPER_VOICE") or self.default_piper_voice
+            # Look for model in voices/ directory: <voice>.onnx
+            model_path = os.path.join(self.piper_models_dir, f"{piper_voice}.onnx")
+            
+            logger.debug(f"Piper binary: {self.piper_binary}")
+            logger.debug(f"Piper models dir: {self.piper_models_dir}")
+            logger.debug(f"Checking for Piper model at {model_path}")
+            
+            if os.path.exists(model_path):
+                logger.info(f"Using Piper voice: {piper_voice}")
+                loop = asyncio.get_running_loop()
+                
+                def _run_piper():
+                    try:
+                        # Prepare environment with libraries
+                        env = os.environ.copy()
+                        env["LD_LIBRARY_PATH"] = f"{self.piper_lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+                        
+                        # Check if it's likely a wrapper or the official binary
+                        is_official = True
+                        try:
+                            help_out = subprocess.check_output([self.piper_binary, "--help"], stderr=subprocess.STDOUT, env=env, text=True).lower()
+                            # Official piper has --model and --config
+                            is_official = "--model" in help_out and "--config" in help_out
+                            # If it explicitly has a 'speak' command, it's a wrapper
+                            if "speak" in help_out.split():
+                                is_official = False
+                            
+                            logger.debug(f"Piper binary detected as {'official' if is_official else 'wrapper'}")
+                        except Exception as e:
+                            logger.debug(f"Could not determine Piper type: {e}")
+                            pass
 
-            def _run():
-                try:
-                    args = [self.piper_binary, "speak"]
-                    # Best-effort: pass a --voice flag if configured (may be ignored by some piper builds)
-                    if piper_voice:
-                        args += ["--voice", str(piper_voice)]
-                    args += [text]
-                    self._proc = subprocess.Popen(args)
-                    self._proc.wait()
-                finally:
-                    self._proc = None
+                        if not is_official:
+                            logger.debug("Using Piper wrapper (speak subcommand)")
+                            args = [self.piper_binary, "speak", "--voice", str(piper_voice), text]
+                            self._proc = subprocess.Popen(args, env=env)
+                            return self._proc.wait() == 0
+                        else:
+                            logger.debug(f"Using official Piper binary pipeline with model: {model_path}")
+                            # Use official piper pipeline
+                            # piper -m model -f - | aplay
+                            # Escape double quotes and backslashes in text
+                            safe_text = text.replace('\\', '\\\\').replace('"', '\\"')
+                            cmd = f'echo "{safe_text}" | LD_LIBRARY_PATH="{self.piper_lib_path}" "{self.piper_binary}" -m "{model_path}" -f - | aplay -q'
+                            logger.debug(f"Running command: {cmd}")
+                            return subprocess.call(cmd, shell=True, env=env) == 0
+                    except Exception as e:
+                        logger.error(f"Piper execution failed: {e}")
+                        return False
+                    finally:
+                        self._proc = None
 
-            await loop.run_in_executor(None, _run)
-            return
+                success = await loop.run_in_executor(None, _run_piper)
+                if success:
+                    return
+                logger.warning("Piper failed, falling back to pyttsx3")
+            else:
+                logger.debug(f"Piper model not found: {model_path}")
 
+        # 2. Fallback to pyttsx3 if Piper skipped or failed
         if self._pytt_engine:
+            logger.info("Using pyttsx3 fallback voice")
             loop = asyncio.get_running_loop()
             try:
                 # Allow runtime voice override

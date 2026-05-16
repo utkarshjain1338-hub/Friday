@@ -5,6 +5,7 @@ Provides self-checking, retry, and clarification behavior for failed actions.
 
 from typing import List, Dict, Any
 from loguru import logger
+from tools.tool_orchestrator import ToolExecutionResult
 
 
 class ReflectionEngine:
