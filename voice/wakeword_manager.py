@@ -137,21 +137,13 @@ class WakeWordManager:
         def _run_oww():
             """Blocking loop that feeds audio chunks to the OWW model."""
             try:
-                if self.device is not None:
-                    stream = sd.InputStream(
-                        device=self.device,
-                        samplerate=self.sample_rate,
-                        channels=1,
-                        dtype="int16",
-                        blocksize=self.chunk_size,
-                    )
-                else:
-                    stream = sd.InputStream(
-                        samplerate=self.sample_rate,
-                        channels=1,
-                        dtype="int16",
-                        blocksize=self.chunk_size,
-                    )
+                stream = sd.InputStream(
+                    device=self.mic_device,
+                    samplerate=self.sample_rate,
+                    channels=1,
+                    dtype="int16",
+                    blocksize=self.chunk_size,
+                )
 
                 with stream as stream:
                     while not detected_event.is_set():
