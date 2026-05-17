@@ -87,6 +87,10 @@ class TTSEngine:
 
     async def speak(self, text: str, voice: str = None):
         """Speak text using Piper or fallback to pyttsx3."""
+        if not text:
+            logger.debug("speak() called with empty/None text — skipping")
+            return
+        text = str(text)
         
         # 1. Try Piper if available and looks configured
         if self.piper_binary:

@@ -10,39 +10,58 @@ import sounddevice as sd
 # This mimics what the Friday assistant expects from an 'openwakeword' binary
 
 def main():
-    # Load model
-    # By default, use the 'hey jarvis' or 'friday' model if available
+    # Load model with all available pre-trained models
     model = Model()
-    
+
+    # Print available models so the caller knows what wake words are active
+    print(f"DEBUG: Loaded wake-word models: {list(model.models.keys())}", file=sys.stderr)
+    sys.stderr.flush()
+
     # Define callback
     def callback(indata, frames, time, status):
         if status:
             print(status, file=sys.stderr)
-            
-        vol = np.linalg.norm(indata)*10
-        if vol > 5.0:
+            sys.stderr.flush()
+
+        # Volume: normalize int16 range to 0..1 before computing norm
+        vol = np.linalg.norm(indata.astype(np.float32) / 32768.0) * 10
+        if vol > 1.5:
             print(f"DEBUG: Mic volume {vol:.2f}", file=sys.stderr)
-        
+            sys.stderr.flush()
+
         # Get predictions
-        # Model.predict returns a dictionary of {model_name: score}
-        prediction = model.predict(indata[:, 0])
-        
+        # openWakeWord's preprocessor requires raw int16 data — do NOT convert to float.
+        # The InputStream is already opened with dtype='int16' so indata[:,0] is int16.
+        try:
+            prediction = model.predict(indata[:, 0])
+        except Exception as exc:
+            print(f"DEBUG: predict() error: {exc}", file=sys.stderr)
+            sys.stderr.flush()
+            return
+
         # Check for detections
         for kw, score in prediction.items():
             if score > 0.5:
-                print(f"Detected {kw} with score {score:.2f}")
-                sys.stdout.flush()
-            # Diagnostic: if it's borderline, print to stderr so we can see it in debug logs without triggering the wake
-            elif score > 0.1:
-                print(f"DEBUG: Heard '{kw}' at score {score:.2f}", file=sys.stderr)
+                # Print the keyword name to stdout — the wrapper calls on_detect with this text
+                print(kw, flush=True)
+            # Diagnostic: near-miss scores (lowered threshold so we can see activity)
+            elif score > 0.05:
+                print(f"DEBUG: Near-miss '{kw}' score={score:.3f}", file=sys.stderr)
+                sys.stderr.flush()
 
     # Print device info to stderr
-    print(f"Using default audio device. Available devices:\n{sd.query_devices()}", file=sys.stderr)
+    print(f"DEBUG: Audio devices:\n{sd.query_devices()}", file=sys.stderr)
+    sys.stderr.flush()
 
     # Start streaming
-    with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280):
-        while True:
-            sd.sleep(1000)
+    try:
+        with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280, dtype='int16'):
+            while True:
+                sd.sleep(1000)
+    except ValueError as e:
+        print(f"Audio Configuration Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     try:

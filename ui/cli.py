@@ -22,6 +22,7 @@ async def get_greeting():
         greeting += " How can I help you?"
         return greeting
 
+    return await asyncio.to_thread(_fetch)
 
 def print_help():
     print("Friday CLI commands:")
