@@ -154,35 +154,43 @@ class FridayRouter:
             return await asyncio.to_thread(open_youtube)
 
         if "battery" in normalized or "cpu" in normalized or "memory" in normalized or "system report" in normalized:
-            return await asyncio.to_thread(get_system_report)
+            raw = await asyncio.to_thread(get_system_report)
+            return await self.llm.ask(f"Please summarize this system status naturally in 1-2 short sentences for speech: {raw}")
 
         if "list home files" in normalized or "show home files" in normalized:
-            return await asyncio.to_thread(list_home)
+            raw = await asyncio.to_thread(list_home)
+            return await self.llm.ask(f"Please summarize these files naturally in 1-2 short sentences: {raw}")
 
         if "search file" in normalized or "find file" in normalized:
             query = self._extract_parameter(normalized, "search file") or self._extract_parameter(normalized, "find file")
-            return await asyncio.to_thread(search_files, query)
+            raw = await asyncio.to_thread(search_files, query)
+            return await self.llm.ask(f"Please summarize these search results naturally: {raw}")
 
         if "create folder" in normalized or "make folder" in normalized:
             target = self._extract_parameter(normalized, "create folder") or self._extract_parameter(normalized, "make folder")
-            return await asyncio.to_thread(create_folder, target)
+            raw = await asyncio.to_thread(create_folder, target)
+            return await self.llm.ask(f"Please confirm this action naturally: {raw}")
 
         if "move file" in normalized and " to " in normalized:
             source, target = normalized.split(" to ", 1)
             source = source.replace("move file", "", 1).strip()
             target = target.strip()
-            return await asyncio.to_thread(move_file, source, target)
+            raw = await asyncio.to_thread(move_file, source, target)
+            return await self.llm.ask(f"Please confirm this file move naturally: {raw}")
 
         if "delete" in normalized or "remove" in normalized:
             target = self._extract_parameter(normalized, "delete") or self._extract_parameter(normalized, "remove")
-            return await asyncio.to_thread(delete_path, target)
+            raw = await asyncio.to_thread(delete_path, target)
+            return await self.llm.ask(f"Please confirm this deletion naturally: {raw}")
 
         if "close" in normalized or "kill" in normalized:
             target = self._extract_parameter(normalized, "close") or self._extract_parameter(normalized, "kill")
-            return await asyncio.to_thread(kill_process, target)
+            raw = await asyncio.to_thread(kill_process, target)
+            return await self.llm.ask(f"Please confirm this process termination naturally: {raw}")
 
         if "list processes" in normalized or "running processes" in normalized:
-            return await asyncio.to_thread(list_processes)
+            raw = await asyncio.to_thread(list_processes)
+            return await self.llm.ask(f"Please summarize the running processes in 1-2 short sentences naturally: {raw}")
 
         # For complex requests, use reasoning agent with tool calling
         if self.reasoning_agent and any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell", "can you", "could you", "please"]):
