@@ -32,7 +32,7 @@ async def get_greeting():
                 "https://wttr.in/?format=%t+%C",
                 headers={'User-Agent': 'curl/7.0'}  # wttr.in returns plain text for curl UA
             )
-            with urllib.request.urlopen(req, timeout=3) as response:
+            with urllib.request.urlopen(req, timeout=1) as response:
                 weather_raw = response.read().decode('utf-8').strip()
                 # Strip any HTML tags in case we still get markup
                 weather_clean = re.sub(r'<[^>]+>', '', weather_raw)
@@ -106,6 +106,10 @@ async def run_voice_mode():
     # Greet the user when activated to confirm it is running
     await audio.speak("I am online. Just say Hey Friday when you need me.")
 
+    import tempfile, pathlib
+    loop = asyncio.get_running_loop()
+    wm = audio.wakeword
+
     while True:
         wake = await audio.wait_for_wake_word()
         if not wake:
@@ -117,43 +121,55 @@ async def run_voice_mode():
         print(f"Assistant: {greeting}")
         await audio.speak(greeting)
 
-        # Record command — use the wakeword manager's reliable recorder
-        # (fixed 5-second window at 16 kHz via PipeWire-pulse)
-        print("[ Listening for your command... ]")
-        loop = asyncio.get_running_loop()
-        wm = audio.wakeword
+        active_loop = True
+        consecutive_silent = 0
 
-        try:
-            raw = await loop.run_in_executor(None, wm._record_seconds, 5.0)
-        except Exception as exc:
-            print(f"Recording error: {exc}")
-            continue
+        while active_loop:
+            print("[ Listening for your command... ]")
+            try:
+                # Record command — use the wakeword manager's reliable recorder
+                # (fixed 5-second window at 16 kHz via PipeWire-pulse)
+                raw = await loop.run_in_executor(None, wm._record_seconds, 5.0)
+            except Exception as exc:
+                print(f"Recording error: {exc}")
+                break
 
-        # Save and transcribe
-        import tempfile, pathlib
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp_path = pathlib.Path(tmp.name)
-        await loop.run_in_executor(None, wm._save_wav, raw, str(tmp_path))
+            # Save and transcribe
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = pathlib.Path(tmp.name)
+            await loop.run_in_executor(None, wm._save_wav, raw, str(tmp_path))
 
-        command = await audio.stt.transcribe_file(str(tmp_path))
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
+            command = await audio.stt.transcribe_file(str(tmp_path))
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
 
-        if not command or not command.strip():
-            print("[ Didn't catch that — say Hey Friday to try again ]")
-            continue
+            if not command or not command.strip() or len(command.strip()) <= 1:
+                consecutive_silent += 1
+                if consecutive_silent >= 2:
+                    print("[ Idle detected — returning to wake word mode ]")
+                    await audio.speak("Going to sleep. Just say Hey Friday when you need me.")
+                    active_loop = False
+                continue
 
-        command = command.strip()
-        print(f"You said: {command}")
+            consecutive_silent = 0
+            command = command.strip()
+            print(f"You said: {command}")
 
-        if command.lower() in {"stop", "exit", "quit", "goodbye", "bye"}:
-            await audio.speak("Goodbye!")
-            print("Stopping voice mode.")
-            return
+            normalized_cmd = command.lower()
+            if any(sleep_word in normalized_cmd for sleep_word in ["go to sleep", "sleep", "goodbye", "bye", "stop"]):
+                await audio.speak("Going to sleep now.")
+                print("Returning to wake-word mode.")
+                active_loop = False
+                break
 
-        response = await assistant.handle_text(command)
-        spoken = tts_clean(response)
-        print(f"Friday: {spoken}")
-        await audio.speak(spoken)
+            if normalized_cmd in {"exit", "quit"}:
+                await audio.speak("Goodbye!")
+                print("Stopping voice mode.")
+                return
+
+            response = await assistant.handle_text(command)
+            spoken = tts_clean(response)
+            print(f"Friday: {spoken}")
+            await audio.speak(spoken)

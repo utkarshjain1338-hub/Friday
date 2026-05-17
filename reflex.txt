@@ -1,0 +1,98 @@
+Because you are building this on Hyprland (Wayland) and Linux, I have structured this list into the exact categories that map to your architectural blueprint (Reflex Layer, Procedural Layer, and Tool Layer).
+
+Here is the master list of human computer operations, ready to be fed into F.R.I.D.A.Y.'s tool registry:
+
+1. Window & Workspace Management (Hyprland / Desktop)
+These are the physical "eye and hand" movements of navigating a desktop.
+
+Launch: Open a specific application by name.
+
+Terminate: Close/kill the currently focused window.
+
+Focus: Switch focus to a specific app (e.g., "bring Firefox to the front").
+
+Workspace Switching: Move to workspace [Number].
+
+Window Routing: Move the current window to workspace [Number].
+
+State Toggles: Toggle fullscreen, toggle floating, or tile a window.
+
+Resize: Increase or decrease the size of the focused window.
+
+2. System Reflexes (Hardware Controls)
+These represent physical buttons a human presses on the laptop. (Perfect for your 0ms Reflex Layer).
+
+Audio Out: Increase volume, decrease volume, toggle mute.
+
+Audio In: Mute/unmute the microphone (crucial for an AI assistant to pause listening).
+
+Display: Increase/decrease screen brightness.
+
+Power State: Lock screen, sleep/suspend, reboot, shutdown.
+
+Connectivity: Toggle Wi-Fi, toggle Bluetooth, connect to a specific known device.
+
+Clipboard: Read current clipboard text, write text to clipboard.
+
+3. Media Controls (Background Audio/Video)
+Playback: Play, Pause.
+
+Navigation: Next track, Previous track.
+
+Scrubbing: Seek forward 10 seconds, seek backward 10 seconds.
+
+4. File System Operations (Data Management)
+This is how a human organizes their hard drive.
+
+Navigation: List contents of a directory (ls).
+
+Creation: Make a new directory, create a new empty file.
+
+Modification: Read file contents, write/append text to a file.
+
+Organization: Rename file/folder, move file to path, copy file to path.
+
+Destruction: Delete file/folder.
+
+Search: Find a file by name or extension across the system.
+
+Archive: Zip a folder, unzip an archive.
+
+5. Browser Automation (The Internet)
+The browser is where 80% of human work happens. For F.R.I.D.A.Y. to be autonomous, it needs atomic browser controls.
+
+Navigation: Go to URL, go back, go forward, refresh page.
+
+Tab Management: Open new tab, close current tab, switch to tab [Index/Name].
+
+Interaction: Click an element (link/button), type text into a focused input box.
+
+Traversal: Scroll down, scroll up, scroll to top, scroll to bottom.
+
+Extraction: Read all visible text on the current webpage (for the AI to process).
+
+6. Keyboard & Mouse Simulation (Raw Input)
+Sometimes there isn't a clean API or command, and the AI just needs to mimic human hands.
+
+Type Text: Simulate typing a string of characters.
+
+Keypress: Simulate hitting a specific key (Enter, Escape, Space, Tab).
+
+Hotkeys: Simulate a key combination (Ctrl+C, Ctrl+V, Super+T).
+
+Mouse Move: Move cursor to X/Y coordinates.
+
+Mouse Click: Left click, right click, double click at current position.
+
+7. Developer & Diagnostic Tasks (System Awareness)
+Since you are a CSE student, F.R.I.D.A.Y. needs to be able to act like a sysadmin.
+
+Resource Check: Read current CPU usage, RAM usage, and battery percentage.
+
+Process Management: List top 5 running processes by RAM/CPU, kill process by PID.
+
+Terminal Execution: Run a raw bash command in the background and return the output.
+
+Log Reading: Read the last 50 lines of a specific system or app log.
+
+Git Operations: Check git status, commit changes, push to origin.

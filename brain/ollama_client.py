@@ -19,7 +19,7 @@ DEFAULT_TIMEOUT = 60  # seconds — generous for first-token latency on CPU
 
 
 class OllamaClient:
-    def __init__(self, model: str = "qwen2.5:3b", host: str = OLLAMA_HOST):
+    def __init__(self, model: str = "qwen2.5:0.5b", host: str = OLLAMA_HOST):
         # Keep binary attr for backward compat (used as availability flag in llm.py)
         self.binary = "http"   # non-None → signals LLM to use us instead of fallback
         self.model = model

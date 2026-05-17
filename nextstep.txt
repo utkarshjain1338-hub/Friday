@@ -1,0 +1,87 @@
+Since you are running Hyprland on CachyOS with a CPU-only Dell Latitude, we are abandoning heavy, traditional desktop automation. Instead, we are building a Wayland-Native, 3-Tier Cognitive Operating Layer.
+
+Here is the complete architecture, followed by the exact sequence of how a command flows through the system, and the step-by-step phases you need to build it.
+
+Part 1: The Master Architecture (The 3-Tier Brain)
+This diagram represents how your project folders map to the actual "organs" of the AI.
+
+Plaintext
+F.R.I.D.A.Y. AI Operating System
+│
+├── 1. PERCEPTION (The Ears)
+│   └── voice/stt_engine.py (Whisper -> Converts voice to text)
+│
+├── 2. SYSTEM STATE (The Sixth Sense)
+│   └── system_state/activity_tracker.py (Constantly reads `hyprctl` JSON)
+│
+├── 3. THE TRAFFIC COP (core/router.py)  <-- THE MOST IMPORTANT FILE
+│   │
+│   ├── GATE 1: REFLEX LAYER (0ms execution)
+│   │   └── reflex/system_controls.py (wpctl, playerctl, hyprctl)
+│   │
+│   ├── GATE 2: SEMANTIC LAYER (100ms execution)
+│   │   └── semantic/similarity_matcher.py (all-MiniLM-L6-v2)
+│   │
+│   └── GATE 3: COGNITIVE LAYER (2s+ execution)
+│       ├── brain/reasoning_agent.py (Qwen 2.5:0.5b via Ollama)
+│       └── tools/ (Filesystem, coding, browser hooks)
+│
+└── 4. MEMORY (The Hippocampus)
+    ├── memory/database.py (SQLite for chat history)
+    └── memory/embeddings.py (ChromaDB for personal preferences)
+Part 2: The Runtime Sequence (How F.R.I.D.A.Y. Thinks)
+When you speak into your microphone, this is the exact, chronological sequence of events that happens inside the code to ensure millisecond performance:
+
+Listen: You say, "Friday, close this window."
+
+Transcribe: voice/ converts the audio to the string "close this window".
+
+Context Inject: system_state/activity_tracker.py quietly attaches the background state to the request: {"active_app": "kitty", "title": "nvim"}.
+
+Route (Gate 1 - Reflex): core/router.py checks its dictionary. It sees the exact phrase "close this window".
+
+Execute (Bypass LLM): The router triggers reflex/system_controls.py.
+
+Action: Python sends hyprctl dispatch killactive. Kitty closes instantly.
+
+Speak: voice/tts_engine.py says "Window closed."
+(Total time: ~60 milliseconds. Qwen was never even woken up.)
+
+Part 3: The Development Phases (Your Engineering Roadmap)
+Do not try to build this all at once. Build it in this exact sequence so you always have a working, testable system.
+
+Phase 1: The Sixth Sense (Hyprland Tracking)
+Goal: Allow Python to "see" your CachyOS desktop.
+
+Action: Build system_state/activity_tracker.py.
+
+Success Criteria: You run the script in your Celestia terminal, and it correctly prints out the JSON of the window you are currently looking at using hyprctl activewindow -j.
+
+Phase 2: The Reflex Engine & Traffic Cop
+Goal: Build the 0ms fast-lane.
+
+Action: 1. Create reflex/system_controls.py containing functions for wpctl (volume), playerctl (media), and hyprctl (workspaces).
+2. Rewrite core/router.py to intercept simple phrases (e.g., "mute", "lock") and trigger those functions directly.
+
+Success Criteria: You can say "Friday, mute," and your system audio mutes instantly without Qwen generating a response.
+
+Phase 3: The Semantic Bridge (NLP)
+Goal: Stop relying on exact word matches; understand meaning instantly.
+
+Action: Install the sentence-transformers Python library. Build semantic/similarity_matcher.py using a tiny model like all-MiniLM-L6-v2.
+
+Success Criteria: You say "It's too loud in here" and the Semantic layer mathematically matches that to the toggle_mute function and executes it.
+
+Phase 4: Cognitive Escalation (The Qwen Integration)
+Goal: Use the LLM only for deep thinking.
+
+Action: Connect core/router.py's fallback mechanism to your brain/reasoning_agent.py. Upgrade the Qwen system prompt to understand that it has access to tools/.
+
+Success Criteria: You say "Summarize my last git commit", the router realizes it doesn't know how to do that, so it hands it to Qwen. Qwen uses the tools/linux/ shell executor to run git log, reads the output, and speaks the summary.
+
+Phase 5: Persistent Memory
+Goal: Make F.R.I.D.A.Y. remember you.
+
+Action: Integrate ChromaDB into memory/.
+
+Success Criteria: You say "I prefer dark mode." Friday saves this. Next time you ask it to generate a web component, it automatically adds Tailwind dark mode classes because it retrieved your preference before answering.

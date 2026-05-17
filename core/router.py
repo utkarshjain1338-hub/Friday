@@ -31,11 +31,18 @@ from skills.registry import SkillRegistry
 from skills.loader import discover_plugins
 from security.validator import assess_command_risk, requires_confirmation
 from security.permission_manager import PermissionManager
+from reflex.system_controls import SystemControls
+from system_state.activity_tracker import ActivityTracker
+from semantic.similarity_matcher import SimilarityMatcher
 
 
 class FridayRouter:
     def __init__(self):
         self.config = self._load_config()
+        self.system_controls = SystemControls()
+        self.activity_tracker = ActivityTracker()
+        self.similarity_matcher = SimilarityMatcher()
+
         
         # Initialize enhanced memory system
         try:
@@ -98,6 +105,107 @@ class FridayRouter:
             hour = _dt.datetime.now().hour
             greet = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
             return f"{greet}! How can I help you?"
+
+        # ----------------------------------------------------------------
+        # GATE 1: REFLEX LAYER (0ms execution Wayland Native)
+        # ----------------------------------------------------------------
+        # Volume controls
+        if any(p in normalized for p in ["toggle mute", "mute system", "unmute system", "toggle sound"]) or normalized == "mute":
+            return await self.system_controls.toggle_mute()
+        if any(p in normalized for p in ["volume up", "raise volume", "increase volume", "louder"]):
+            return await self.system_controls.volume_up()
+        if any(p in normalized for p in ["volume down", "lower volume", "decrease volume", "quieter"]):
+            return await self.system_controls.volume_down()
+
+        # Media controls
+        if any(p in normalized for p in ["play pause", "toggle playback", "play music", "pause music"]) or normalized in ["play", "pause"]:
+            return await self.system_controls.media_play_pause()
+        if any(p in normalized for p in ["next song", "next track", "skip song"]):
+            return await self.system_controls.media_next()
+        if any(p in normalized for p in ["previous song", "prev song", "previous track"]):
+            return await self.system_controls.media_previous()
+
+        # Window & Screen controls
+        if any(p in normalized for p in ["close this window", "close window", "kill active window", "close active window"]):
+            return await self.system_controls.close_active_window()
+        if any(p in normalized for p in ["lock screen", "lock session", "lock pc"]):
+            return await self.system_controls.lock_screen()
+
+        # Workspace controls
+        import re
+        ws_match = re.search(r"workspace\s+(\d+)", normalized)
+        if ws_match:
+            ws_num = ws_match.group(1)
+            return await self.system_controls.switch_workspace(ws_num)
+        if "next workspace" in normalized:
+            return await self.system_controls.next_workspace()
+        if "previous workspace" in normalized or "prev workspace" in normalized:
+            return await self.system_controls.prev_workspace()
+
+        # Window state triggers
+        if any(p in normalized for p in ["toggle fullscreen", "fullscreen window", "go fullscreen"]):
+            return await self.system_controls.toggle_fullscreen()
+        if any(p in normalized for p in ["toggle floating", "float window"]):
+            return await self.system_controls.toggle_floating()
+
+        # Hardware & Power triggers
+        if any(p in normalized for p in ["mute mic", "unmute mic", "toggle microphone", "toggle mic"]):
+            return await self.system_controls.toggle_mic_mute()
+        if any(p in normalized for p in ["increase brightness", "brightness up", "brighten screen"]):
+            return await self.system_controls.brightness_up()
+        if any(p in normalized for p in ["decrease brightness", "brightness down", "dim screen"]):
+            return await self.system_controls.brightness_down()
+        if any(p in normalized for p in ["suspend system", "system sleep", "put computer to sleep", "suspend pc"]):
+            return await self.system_controls.system_suspend()
+        if any(p in normalized for p in ["reboot system", "restart pc", "reboot pc"]):
+            return await self.system_controls.system_reboot()
+        if any(p in normalized for p in ["shutdown system", "power off pc", "turn off pc", "shutdown pc"]):
+            return await self.system_controls.system_shutdown()
+
+        # ----------------------------------------------------------------
+        # GATE 2: SEMANTIC LAYER (100ms execution NLP similarity matcher)
+        # ----------------------------------------------------------------
+        intent, confidence = self.similarity_matcher.match_intent(text)
+        if intent and confidence >= 0.4:
+            logger.info(f"Matched semantic intent '{intent}' with confidence {confidence:.2f} for query '{text}'")
+            if intent == "toggle_mute":
+                return await self.system_controls.toggle_mute()
+            elif intent == "volume_up":
+                return await self.system_controls.volume_up()
+            elif intent == "volume_down":
+                return await self.system_controls.volume_down()
+            elif intent == "media_play_pause":
+                return await self.system_controls.media_play_pause()
+            elif intent == "media_next":
+                return await self.system_controls.media_next()
+            elif intent == "media_previous":
+                return await self.system_controls.media_previous()
+            elif intent == "close_active_window":
+                return await self.system_controls.close_active_window()
+            elif intent == "lock_screen":
+                return await self.system_controls.lock_screen()
+            elif intent == "next_workspace":
+                return await self.system_controls.next_workspace()
+            elif intent == "prev_workspace":
+                return await self.system_controls.prev_workspace()
+            elif intent == "toggle_fullscreen":
+                return await self.system_controls.toggle_fullscreen()
+            elif intent == "toggle_floating":
+                return await self.system_controls.toggle_floating()
+            elif intent == "toggle_mic_mute":
+                return await self.system_controls.toggle_mic_mute()
+            elif intent == "brightness_up":
+                return await self.system_controls.brightness_up()
+            elif intent == "brightness_down":
+                return await self.system_controls.brightness_down()
+            elif intent == "system_suspend":
+                return await self.system_controls.system_suspend()
+            elif intent == "system_reboot":
+                return await self.system_controls.system_reboot()
+            elif intent == "system_shutdown":
+                return await self.system_controls.system_shutdown()
+
+
 
         # plugin skills first
         try:
@@ -192,23 +300,80 @@ class FridayRouter:
             raw = await asyncio.to_thread(list_processes)
             return await self.llm.ask(f"Please summarize the running processes in 1-2 short sentences naturally: {raw}")
 
-        # For complex requests, use reasoning agent with tool calling
-        if self.reasoning_agent and any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell", "can you", "could you", "please"]):
+        # ----------------------------------------------------------------
+        # GATE 1.5: MEMORY RECORDER LAYER
+        # ----------------------------------------------------------------
+        memory_prefixes = [
+            "remember that ",
+            "remember ",
+            "i prefer ",
+            "i remember that ",
+            "i remember ",
+            "save preference ",
+            "store preference "
+        ]
+        matched_prefix = None
+        for prefix in memory_prefixes:
+            if normalized.startswith(prefix):
+                matched_prefix = prefix
+                break
+
+        if matched_prefix:
+            if self.memory_engine:
+                raw_pref = text[len(matched_prefix):].strip()
+                
+                # Deduce key and value, e.g. "my preference is dark mode" -> key="my preference", value="dark mode"
+                if " is " in raw_pref.lower():
+                    parts = raw_pref.split(" is ", 1)
+                    key_part = parts[0].strip()
+                    val_part = parts[1].strip()
+                else:
+                    key_part = "preference"
+                    val_part = raw_pref
+                
+                self.memory_engine.learn_fact("preference", key_part.lower(), val_part)
+                return f"I have committed that to memory: {raw_pref}"
+
+        # ----------------------------------------------------------------
+        # GATE 3: COGNITIVE LAYER (Context Injection & LLM Escalation)
+        # ----------------------------------------------------------------
+        system_state = await self.activity_tracker.get_active_window()
+        context_prefix = (
+            f"[System Context: Active App='{system_state['active_app']}', "
+            f"Window Title='{system_state['title']}', "
+            f"Workspace='{system_state['workspace_name']}']"
+        )
+        
+        # Inject memory context if available
+        memory_str = ""
+        if self.memory_engine:
             try:
-                logger.info("Using reasoning agent for complex request")
-                return await self.reasoning_agent.reason_and_act(text)
+                mem_context = self.memory_engine.build_context(text)
+                facts = mem_context.get("semantic", [])
+                episodes = mem_context.get("episodic", [])
+                if facts or episodes:
+                    memory_str = " [Retrieved Memories: "
+                    if facts:
+                        memory_str += "Facts=" + "; ".join([f"{f['key']}={f['value']}" for f in facts])
+                    if episodes:
+                        memory_str += " Recent=" + "; ".join([f['event'] for f in episodes])
+                    memory_str += "]"
+            except Exception as e:
+                logger.error(f"Failed to query memory: {e}")
+
+        contextual_query = f"{context_prefix}{memory_str} {text}"
+
+        # Route to reasoning agent with tool calling!
+        if self.reasoning_agent:
+            try:
+                logger.info(f"Using reasoning agent for request with system state context: {context_prefix}")
+                return await self.reasoning_agent.reason_and_act(contextual_query)
             except Exception as e:
                 logger.error(f"Reasoning agent failed: {e}")
-                return await self.llm.ask(text)
+                return await self.llm.ask(contextual_query)
         
-        # Fallback to LLM for unclear requests
-        if any(keyword in normalized for keyword in ["help", "what", "who", "how", "tell"]):
-            return await self.llm.ask(text)
-
-        return (
-            "I did not understand that yet. Try a safe command like 'open firefox', 'show battery status', "
-            "or ask for help."
-        )
+        # Fallback to pure LLM if reasoning agent is not loaded
+        return await self.llm.ask(contextual_query)
 
     def _extract_parameter(self, text: str, phrase: str) -> str:
         if phrase not in text:
