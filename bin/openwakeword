@@ -17,17 +17,6 @@ def main():
     print(f"DEBUG: Loaded wake-word models: {list(model.models.keys())}", file=sys.stderr)
     sys.stderr.flush()
 
-    device = os.getenv("OPENWAKEWORD_DEVICE") or os.getenv("AUDIODEV")
-    if device is not None:
-        try:
-            device = int(device)
-        except ValueError:
-            pass
-
-    if device is not None:
-        print(f"DEBUG: Using audio device: {device}", file=sys.stderr)
-        sys.stderr.flush()
-
     # Define callback
     def callback(indata, frames, time, status):
         if status:
@@ -66,14 +55,9 @@ def main():
 
     # Start streaming
     try:
-        if device is not None:
-            with sd.InputStream(device=device, channels=1, samplerate=16000, callback=callback, blocksize=1280, dtype='int16'):
-                while True:
-                    sd.sleep(1000)
-        else:
-            with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280, dtype='int16'):
-                while True:
-                    sd.sleep(1000)
+        with sd.InputStream(channels=1, samplerate=16000, callback=callback, blocksize=1280, dtype='int16'):
+            while True:
+                sd.sleep(1000)
     except ValueError as e:
         print(f"Audio Configuration Error: {e}", file=sys.stderr)
         sys.exit(1)
