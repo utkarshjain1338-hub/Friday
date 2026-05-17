@@ -61,6 +61,7 @@ class AudioManager:
             samplerate=self.streaming_transcriber.sample_rate,
             channels=1,
             dtype="float32",
+            device=self.wakeword.mic_device,   # Use the PipeWire-pulse device, not default
         )
         sd.wait()
         return frames.flatten()

@@ -38,15 +38,66 @@ class WakeWordManager:
         self.sample_rate = sample_rate
         self.stt = STTEngine()
         self.chunk_size = 1280          # 80 ms — openWakeWord's native chunk
-        self.rms_threshold = 0.08       # below this → silence/ambient noise, skip STT
-        self.device = os.getenv("VOICE_INPUT_DEVICE") or os.getenv("AUDIODEV")
-        if self.device is not None:
-            try:
-                self.device = int(self.device)
-            except ValueError:
-                pass
+        self.rms_threshold = 0.10       # background noise peaks ~0.07; user speech ~0.15+
         self._oww_model = None
         self._oww_available = self._try_load_oww()
+        # On Arch+Hyprland, the ALSA default device routes through PipeWire which
+        # can include system audio loopback. Prefer the physical HDA mic instead.
+        self.mic_device, self.mic_native_rate = self._find_mic_device()
+        logger.info(f"Microphone device: [{self.mic_device}] "
+                    f"{sd.query_devices(self.mic_device)['name']} "
+                    f"@ {self.mic_native_rate} Hz")
+
+    # ------------------------------------------------------------------
+    # Audio device selection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _find_mic_device() -> tuple[int | None, int]:
+        """Return (device_index, native_sample_rate) for the best microphone.
+
+        Priority on Arch+Hyprland/PipeWire:
+          1. 'pulse' (PipeWire-pulse) — correct choice on PipeWire systems.
+             Handles concurrent access so Piper TTS and mic recording
+             can run simultaneously. Supports arbitrary sample rates.
+          2. 'pipewire' device — also PipeWire managed.
+          3. Raw hw device (hw:0,0) — LAST RESORT only. PipeWire owns it
+             exclusively, so opening it directly causes 'Device unavailable'.
+          4. System default.
+        """
+        import sounddevice as sd
+        devices = sd.query_devices()
+
+        # Priority 1: PipeWire-pulse (best for Hyprland — concurrent access OK)
+        for i, d in enumerate(devices):
+            if d["max_input_channels"] >= 1 and d["name"].lower() == "pulse":
+                native_sr = int(d["default_samplerate"])
+                logger.debug(f"Selected PipeWire-pulse mic: [{i}] {d['name']} @ {native_sr} Hz")
+                return i, native_sr
+
+        # Priority 2: pipewire device
+        for i, d in enumerate(devices):
+            if d["max_input_channels"] >= 1 and d["name"].lower() == "pipewire":
+                native_sr = int(d["default_samplerate"])
+                logger.debug(f"Selected pipewire mic: [{i}] {d['name']} @ {native_sr} Hz")
+                return i, native_sr
+
+        # Priority 3: raw hardware (last resort — may fail if PipeWire owns it)
+        hw_keywords = ["alc", "hw:0", "analog", "hda intel"]
+        for i, d in enumerate(devices):
+            if d["max_input_channels"] < 1:
+                continue
+            name = d["name"].lower()
+            if any(kw in name for kw in hw_keywords):
+                native_sr = int(d["default_samplerate"])
+                logger.warning(f"Falling back to raw hardware mic (may conflict with PipeWire): "
+                               f"[{i}] {d['name']} @ {native_sr} Hz")
+                return i, native_sr
+
+        # Priority 4: system default
+        logger.debug("Using system default mic device")
+        default_sr = int(sd.query_devices(sd.default.device[0])["default_samplerate"])
+        return None, default_sr
 
     # ------------------------------------------------------------------
     # Public API
@@ -155,23 +206,31 @@ class WakeWordManager:
     def _is_non_speech(text: str) -> bool:
         """Return True for Whisper non-speech / ambient-audio tokens.
 
-        Whisper produces several patterns for non-speech audio:
-          (clapping)                  ← parenthetical
-          [MUSIC PLAYING]             ← square bracket
-          ♪ Yeah ♪ ♪ And you could ♪ ← music notes
-          Short fragments             ← noise artifacts
+        Whisper produces several patterns for non-speech audio, sometimes with
+        a leading prefix like '>>' or '-':
+          (clapping)           ← parenthetical
+          [MUSIC PLAYING]      ← square bracket
+          >> [INAUDIBLE]       ← prefixed bracket (the '>>' defeats naive check)
+          - [music]            ← dash-prefixed bracket
+          ♪ Yeah ♪             ← music notes
         """
         stripped = text.strip()
-        if stripped.startswith("(") and stripped.endswith(")"):
+        # Strip common leading prefixes Whisper adds: '>>', '-', '*', numbers
+        import re
+        core = re.sub(r'^[>\-\*\d\.\s]+', '', stripped).strip()
+
+        if core.startswith("(") and core.endswith(")"):
             return True
-        if stripped.startswith("[") and stripped.endswith("]"):
+        if core.startswith("[") and core.endswith("]"):
             return True
         if "♪" in stripped:
+            return True
+        # Also filter '[inaudible]' anywhere in short transcriptions
+        if re.search(r'\[\s*inaudible\s*\]', stripped, re.IGNORECASE):
             return True
         if len(stripped.split()) < 2:
             return True
         return False
-
 
     async def _wait_for_stt_wake_word(self) -> bool:
         """Record audio in a rolling fashion and transcribe each voiced chunk."""
@@ -230,21 +289,71 @@ class WakeWordManager:
     # ------------------------------------------------------------------
 
     def _record_seconds(self, duration: float) -> np.ndarray:
-        """Record `duration` seconds of 16-bit mono audio. Returns shape (N,)."""
-        frames = sd.rec(
-            int(duration * self.sample_rate),
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="int16",
-            device=self.device,
-        ) if self.device is not None else sd.rec(
-            int(duration * self.sample_rate),
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="int16",
-        )
-        sd.wait()
-        return frames[:, 0]
+        """Record `duration` seconds of audio, returned as 16 kHz int16 mono.
+
+        Uses PipeWire-pulse which supports any requested sample rate via its
+        built-in resampler. Falls back to native-rate recording + scipy
+        resampling if the device doesn't accept 16000 Hz directly.
+        Retries on transient 'Device unavailable' errors (e.g. right after TTS).
+        """
+        import math, time
+        from scipy.signal import resample_poly  # type: ignore
+
+        last_exc = None
+        for attempt in range(5):   # retry up to 5x on device-busy errors
+            try:
+                # Try recording at the target 16000 Hz directly.
+                # PipeWire-pulse handles resampling internally.
+                try:
+                    frames = sd.rec(
+                        int(duration * self.sample_rate),
+                        samplerate=self.sample_rate,
+                        channels=1,
+                        dtype="int16",
+                        device=self.mic_device,
+                    )
+                    sd.wait()
+                    return frames[:, 0]
+                except Exception as e:
+                    if "sample rate" in str(e).lower() or "9997" in str(e):
+                        # Device doesn't accept 16000 Hz — record at native rate
+                        # and resample ourselves
+                        raise
+                    raise
+            except Exception as exc:
+                err_str = str(exc)
+                if "9985" in err_str or "unavailable" in err_str.lower():
+                    # Device temporarily busy (e.g. TTS just released it)
+                    wait_s = 0.5 * (attempt + 1)
+                    logger.debug(f"Mic device busy, retrying in {wait_s:.1f}s "
+                                 f"(attempt {attempt + 1}/5)")
+                    time.sleep(wait_s)
+                    last_exc = exc
+                    continue
+                elif "sample rate" in err_str.lower() or "9997" in err_str:
+                    # Device doesn't support 16000 Hz — record at native rate
+                    native_sr = self.mic_native_rate
+                    logger.debug(f"16000 Hz not supported, recording at {native_sr} Hz then resampling")
+                    frames = sd.rec(
+                        int(duration * native_sr),
+                        samplerate=native_sr,
+                        channels=1,
+                        dtype="int16",
+                        device=self.mic_device,
+                    )
+                    sd.wait()
+                    audio = frames[:, 0]
+                    gcd = math.gcd(self.sample_rate, native_sr)
+                    resampled = resample_poly(
+                        audio.astype(np.float32),
+                        self.sample_rate // gcd,
+                        native_sr // gcd,
+                    )
+                    return np.clip(resampled, -32768, 32767).astype(np.int16)
+                else:
+                    raise
+
+        raise last_exc or RuntimeError("Failed to open microphone after retries")
 
     def _save_wav(self, audio: np.ndarray, path: str) -> None:
         with wave.open(path, "wb") as wf:

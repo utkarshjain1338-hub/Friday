@@ -80,8 +80,25 @@ class FridayRouter:
             return yaml.safe_load(handle)
 
     async def route(self, text: str) -> str:
+        import datetime as _dt
         normalized = text.lower().strip()
-        
+
+        # ----------------------------------------------------------------
+        # Fast built-in handlers (no LLM needed)
+        # ----------------------------------------------------------------
+        if any(p in normalized for p in ["what time", "current time", "what's the time", "whats the time"]):
+            now = _dt.datetime.now().strftime("%I:%M %p")
+            return f"It is {now}."
+
+        if any(p in normalized for p in ["what date", "today's date", "todays date", "what day", "what is today"]):
+            today = _dt.datetime.now().strftime("%A, %B %d, %Y")
+            return f"Today is {today}."
+
+        if any(p in normalized for p in ["hello", "hi friday", "hey", "good morning", "good evening", "good afternoon"]):
+            hour = _dt.datetime.now().hour
+            greet = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+            return f"{greet}! How can I help you?"
+
         # plugin skills first
         try:
             matches = self.registry.find_for_command(normalized)
