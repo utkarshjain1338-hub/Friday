@@ -40,7 +40,10 @@ class WakeWordManager:
         self.chunk_size = 1280          # 80 ms — openWakeWord's native chunk
         self.rms_threshold = 0.10       # background noise peaks ~0.07; user speech ~0.15+
         self._oww_model = None
-        self._oww_available = self._try_load_oww()
+        # OWW doesn't have a native 'Hey Friday' model and triggers false positives.
+        # Force fallback to the robust STT engine.
+        self._oww_available = False  
+        
         # On Arch+Hyprland, the ALSA default device routes through PipeWire which
         # can include system audio loopback. Prefer the physical HDA mic instead.
         self.mic_device, self.mic_native_rate = self._find_mic_device()
