@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import os
 import tempfile
 import wave
 from pathlib import Path
@@ -37,7 +38,13 @@ class WakeWordManager:
         self.sample_rate = sample_rate
         self.stt = STTEngine()
         self.chunk_size = 1280          # 80 ms — openWakeWord's native chunk
-        self.rms_threshold = 0.005      # below this → silence, skip STT
+        self.rms_threshold = 0.08       # below this → silence/ambient noise, skip STT
+        self.device = os.getenv("VOICE_INPUT_DEVICE") or os.getenv("AUDIODEV")
+        if self.device is not None:
+            try:
+                self.device = int(self.device)
+            except ValueError:
+                pass
         self._oww_model = None
         self._oww_available = self._try_load_oww()
 
@@ -46,12 +53,13 @@ class WakeWordManager:
     # ------------------------------------------------------------------
 
     async def wait_for_wake_word(self) -> bool:
-        # NOTE: The pre-trained openWakeWord models (hey_jarvis, alexa, hey_mycroft)
-        # are accent/voice-specific and do not reliably work for all users.
-        # We go straight to Whisper STT detection which correctly transcribes speech.
-        # To use OWW, train a custom model for your voice with:
-        #   https://github.com/dscripka/openWakeWord#training-new-models
         logger.info("Listening… say 'Hey Friday' or 'Friday' to wake up.")
+        if self._oww_available:
+            detected = await self._wait_for_oww_native(timeout=30.0)
+            if detected:
+                return True
+            logger.info("openWakeWord did not detect a wake word; falling back to STT.")
+
         return await self._wait_for_stt_wake_word()
 
     # ------------------------------------------------------------------
@@ -78,12 +86,23 @@ class WakeWordManager:
         def _run_oww():
             """Blocking loop that feeds audio chunks to the OWW model."""
             try:
-                with sd.InputStream(
-                    samplerate=self.sample_rate,
-                    channels=1,
-                    dtype="int16",
-                    blocksize=self.chunk_size,
-                ) as stream:
+                if self.device is not None:
+                    stream = sd.InputStream(
+                        device=self.device,
+                        samplerate=self.sample_rate,
+                        channels=1,
+                        dtype="int16",
+                        blocksize=self.chunk_size,
+                    )
+                else:
+                    stream = sd.InputStream(
+                        samplerate=self.sample_rate,
+                        channels=1,
+                        dtype="int16",
+                        blocksize=self.chunk_size,
+                    )
+
+                with stream as stream:
                     while not detected_event.is_set():
                         chunk, _overflowed = stream.read(self.chunk_size)
                         audio = chunk[:, 0]   # int16, shape (1280,)
@@ -213,6 +232,12 @@ class WakeWordManager:
     def _record_seconds(self, duration: float) -> np.ndarray:
         """Record `duration` seconds of 16-bit mono audio. Returns shape (N,)."""
         frames = sd.rec(
+            int(duration * self.sample_rate),
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="int16",
+            device=self.device,
+        ) if self.device is not None else sd.rec(
             int(duration * self.sample_rate),
             samplerate=self.sample_rate,
             channels=1,
