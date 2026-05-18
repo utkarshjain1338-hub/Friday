@@ -21,9 +21,19 @@ DEFAULT_TIMEOUT = 60  # seconds — generous for first-token latency on CPU
 class OllamaClient:
     def __init__(self, model: str = "qwen2.5:0.5b", host: str = OLLAMA_HOST):
         # Keep binary attr for backward compat (used as availability flag in llm.py)
-        self.binary = "http"   # non-None → signals LLM to use us instead of fallback
+        self.binary = "http"
+        self.available = False
         self.model = model
         self.host = host.rstrip("/")
+
+    async def is_available(self) -> bool:
+        """Return whether the Ollama daemon is reachable."""
+        if self.available:
+            return True
+        self.available = await self._is_available()
+        if not self.available:
+            self.binary = None
+        return self.available
 
     async def _is_available(self) -> bool:
         """Check if the Ollama daemon is reachable."""

@@ -1,3 +1,4 @@
+import os
 import yaml
 from pathlib import Path
 from automation.command_executor import execute_safe_command
@@ -23,8 +24,12 @@ from automation.browser_controller import (
 from brain.llm import FridayLLM
 from brain.reasoning_agent import ReasoningAgent
 from brain.memory_reasoning_engine import MemoryReasoningEngine
+from intents.intent_classifier import IntentClassifier
+from learning.adaptive_learner import AdaptiveLearner
 from memory.enhanced_memory import EnhancedMemoryDatabase
+from system_state.context_monitor import ContextMonitor
 from tools.tool_loader import create_tool_system
+from workflows.workflow_engine import WorkflowEngine
 from loguru import logger
 import asyncio
 from skills.registry import SkillRegistry
@@ -41,6 +46,10 @@ class FridayRouter:
         self.config = self._load_config()
         self.system_controls = SystemControls()
         self.activity_tracker = ActivityTracker()
+        self.context_monitor = ContextMonitor()
+        self.intent_classifier = IntentClassifier()
+        self.workflow_engine = WorkflowEngine()
+        self.learning_engine = AdaptiveLearner()
         self.similarity_matcher = SimilarityMatcher()
 
         
@@ -63,14 +72,20 @@ class FridayRouter:
             self.tool_registry = None
             self.tool_orchestrator = None
         
-        # Initialize LLM with tool registry
-        self.llm = FridayLLM(tool_registry=self.tool_registry)
-        
-        # Initialize reasoning agent
-        if self.tool_orchestrator:
-            self.reasoning_agent = ReasoningAgent(self.llm, self.tool_orchestrator)
-        else:
+        # Optional no-LLM mode for pure procedural intelligence
+        self.no_llm_mode = os.getenv("NO_LLM_MODE", "false").strip().lower() in ("1", "true", "yes", "on")
+        if self.no_llm_mode:
+            self.llm = None
             self.reasoning_agent = None
+            logger.info("No-LLM mode enabled: Friday will use semantic and procedural intelligence only.")
+        else:
+            # Initialize LLM with tool registry
+            self.llm = FridayLLM(tool_registry=self.tool_registry)
+            # Initialize reasoning agent
+            if self.tool_orchestrator:
+                self.reasoning_agent = ReasoningAgent(self.llm, self.tool_orchestrator)
+            else:
+                self.reasoning_agent = None
         
         # plugin registry
         self.registry = SkillRegistry()
@@ -89,6 +104,7 @@ class FridayRouter:
     async def route(self, text: str) -> str:
         import datetime as _dt
         normalized = text.lower().strip()
+        self.learning_engine.track_command(text)
 
         # ----------------------------------------------------------------
         # Fast built-in handlers (no LLM needed)
@@ -161,6 +177,14 @@ class FridayRouter:
             return await self.system_controls.system_reboot()
         if any(p in normalized for p in ["shutdown system", "power off pc", "turn off pc", "shutdown pc"]):
             return await self.system_controls.system_shutdown()
+
+        # ----------------------------------------------------------------
+        # Workflow routing and intent classification
+        # ----------------------------------------------------------------
+        intent_name, intent_category, intent_score = self.intent_classifier.classify(text)
+        logger.info(f"Intent classifier: {intent_name} / {intent_category} (score {intent_score:.2f})")
+        if intent_name in self.workflow_engine.list_workflows():
+            return await self.workflow_engine.execute_workflow(intent_name)
 
         # ----------------------------------------------------------------
         # GATE 2: SEMANTIC LAYER (100ms execution NLP similarity matcher)
@@ -276,6 +300,9 @@ class FridayRouter:
                 return await asyncio.to_thread(open_youtube, query)
             return await asyncio.to_thread(open_youtube)
 
+        if self.no_llm_mode:
+            return await self._route_without_llm(text, normalized)
+
         if "battery" in normalized or "cpu" in normalized or "memory" in normalized or "system report" in normalized:
             raw = await asyncio.to_thread(get_system_report)
             return await self.llm.ask(f"Please summarize this system status naturally in 1-2 short sentences for speech: {raw}")
@@ -353,10 +380,12 @@ class FridayRouter:
         # GATE 3: COGNITIVE LAYER (Context Injection & LLM Escalation)
         # ----------------------------------------------------------------
         system_state = await self.activity_tracker.get_active_window()
+        rich_state = await self.context_monitor.get_context()
         context_prefix = (
             f"[System Context: Active App='{system_state['active_app']}', "
             f"Window Title='{system_state['title']}', "
-            f"Workspace='{system_state['workspace_name']}']"
+            f"Workspace='{system_state['workspace_name']}', "
+            f"Clipboard='{rich_state.get('clipboard', '')}']"
         )
         
         # Inject memory context if available
@@ -389,6 +418,119 @@ class FridayRouter:
         
         # Fallback to pure LLM if reasoning agent is not loaded
         return await self.llm.ask(contextual_query)
+
+    async def _route_without_llm(self, text: str, normalized: str) -> str:
+        memory_prefixes = [
+            "remember that ",
+            "remember ",
+            "i prefer ",
+            "i remember that ",
+            "i remember ",
+            "save preference ",
+            "store preference "
+        ]
+        matched_prefix = None
+        for prefix in memory_prefixes:
+            if normalized.startswith(prefix):
+                matched_prefix = prefix
+                break
+
+        if matched_prefix and self.memory_engine:
+            raw_pref = text[len(matched_prefix):].strip()
+            if " is " in raw_pref.lower():
+                parts = raw_pref.split(" is ", 1)
+                key_part = parts[0].strip()
+                val_part = parts[1].strip()
+            else:
+                key_part = "preference"
+                val_part = raw_pref
+            self.memory_engine.learn_fact("preference", key_part.lower(), val_part)
+            return f"I have committed that to memory: {raw_pref}"
+
+        if self.memory_engine and normalized.startswith(("what ", "what's ", "whats ", "who ", "where ", "when ", "how ", "why ")):
+            if normalized.startswith("what"):
+                return self.memory_engine.answer_what_question(text)
+            if normalized.startswith("when"):
+                return self.memory_engine.answer_when_question(text)
+            if normalized.startswith("how"):
+                return self.memory_engine.answer_how_question(text)
+            if normalized.startswith("who") or normalized.startswith("where") or normalized.startswith("why"):
+                return self.memory_engine.answer_what_question(text)
+
+        if "battery" in normalized or "cpu" in normalized or "memory" in normalized or "system report" in normalized:
+            raw = await asyncio.to_thread(get_system_report)
+            return self._summarize_system_report(raw)
+
+        if "list home files" in normalized or "show home files" in normalized:
+            raw = await asyncio.to_thread(list_home)
+            return self._summarize_file_list(raw)
+
+        if "search file" in normalized or "find file" in normalized:
+            query = self._extract_parameter(normalized, "search file") or self._extract_parameter(normalized, "find file")
+            raw = await asyncio.to_thread(search_files, query)
+            return self._summarize_search_results(raw)
+
+        if "create folder" in normalized or "make folder" in normalized:
+            target = self._extract_parameter(normalized, "create folder") or self._extract_parameter(normalized, "make folder")
+            raw = await asyncio.to_thread(create_folder, target)
+            return raw
+
+        if "move file" in normalized and " to " in normalized:
+            source, target = normalized.split(" to ", 1)
+            source = source.replace("move file", "", 1).strip()
+            target = target.strip()
+            return await asyncio.to_thread(move_file, source, target)
+
+        if "delete" in normalized or "remove" in normalized:
+            target = self._extract_parameter(normalized, "delete") or self._extract_parameter(normalized, "remove")
+            return await asyncio.to_thread(delete_path, target)
+
+        if "close" in normalized or "kill" in normalized:
+            target = self._extract_parameter(normalized, "close") or self._extract_parameter(normalized, "kill")
+            return await asyncio.to_thread(kill_process, target)
+
+        if self.memory_engine:
+            suggestion = self.memory_engine.suggest_action(text)
+            if suggestion:
+                return suggestion
+
+        return (
+            "I am running in pure no-LLM mode. "
+            "I can handle system controls, file helpers, and remembered preferences without calling a model. "
+            "Try asking something like 'open Firefox', 'show battery status', or 'remember my preference is dark theme'."
+        )
+
+    def _summarize_system_report(self, report: str) -> str:
+        lines = [line.strip() for line in report.splitlines() if line.strip()]
+        summary = []
+        for line in lines:
+            if line.startswith("CPU usage") or line.startswith("Memory usage") or line.startswith("Battery") or line.startswith("Network"):
+                summary.append(line)
+        if not summary:
+            return "I could not summarize the system report right now."
+        return " | ".join(summary)
+
+    def _summarize_file_list(self, raw: str) -> str:
+        paths = [line for line in raw.splitlines() if line.strip()]
+        count = len(paths)
+        if count == 0:
+            return "No files found in your home directory."
+        sample = paths[:10]
+        return f"I found {count} files in your home folder. Here are the first few: {', '.join(sample)}."
+
+    def _summarize_search_results(self, raw: str) -> str:
+        paths = [line for line in raw.splitlines() if line.strip()]
+        if not paths:
+            return raw
+        sample = paths[:10]
+        return f"Found {len(paths)} matching files. First results: {', '.join(sample)}."
+
+    def _summarize_process_list(self, raw: str) -> str:
+        lines = [line.strip() for line in raw.splitlines() if line.strip()]
+        if not lines:
+            return "No processes were returned."
+        top = lines[:5]
+        return f"Current processes: {', '.join(top)}."
 
     def _extract_parameter(self, text: str, phrase: str) -> str:
         if phrase not in text:

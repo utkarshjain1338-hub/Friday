@@ -157,6 +157,16 @@ export OLLAMA_MODEL=mistral
 export OLLAMA_URL=http://localhost:11434
 ```
 
+### No-LLM mode
+
+If you want Friday to run using semantic and procedural intelligence only, set:
+
+```bash
+export NO_LLM_MODE=true
+```
+
+This will keep the assistant local and avoid calling Ollama.
+
 ---
 
 ## Step 5: Run Friday Locally

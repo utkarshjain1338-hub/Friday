@@ -85,6 +85,13 @@ class FridayLLM:
             LLM response (may contain tool calls)
         """
         self.history.append({"role": "user", "content": prompt})
+        if self.client.binary:
+            try:
+                if not await self.client.is_available():
+                    return self._fallback_response(prompt)
+            except Exception:
+                return self._fallback_response(prompt)
+
         if not self.client.binary:
             return self._fallback_response(prompt)
 
