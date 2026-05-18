@@ -110,7 +110,7 @@ class FridayRouter:
         # GATE 1: REFLEX LAYER (0ms execution Wayland Native)
         # ----------------------------------------------------------------
         # Volume controls
-        if any(p in normalized for p in ["toggle mute", "mute system", "unmute system", "toggle sound"]) or normalized == "mute":
+        if any(p in normalized for p in ["toggle mute", "mute system", "unmute system", "toggle sound", "mute volume", "mute the volume"]) or normalized == "mute":
             return await self.system_controls.toggle_mute()
         if any(p in normalized for p in ["volume up", "raise volume", "increase volume", "louder"]):
             return await self.system_controls.volume_up()
@@ -256,8 +256,23 @@ class FridayRouter:
             return await asyncio.to_thread(search_google, query)
 
         if "youtube" in normalized:
-            if "search" in normalized:
+            query = ""
+            if "search youtube for " in normalized:
+                query = self._extract_parameter(normalized, "search youtube for ")
+            elif "search youtube " in normalized:
+                query = self._extract_parameter(normalized, "search youtube ")
+            elif "play " in normalized and " on youtube" in normalized:
+                query = normalized.split("play ")[1].split(" on youtube")[0].strip()
+            elif "search " in normalized and " on youtube" in normalized:
+                query = normalized.split("search ")[1].split(" on youtube")[0].strip()
+            elif " on youtube" in normalized:
+                parts = normalized.split(" on youtube")
+                if parts[0]:
+                    query = parts[0].strip()
+            elif "search" in normalized:
                 query = self._extract_parameter(normalized, "search youtube")
+            
+            if query:
                 return await asyncio.to_thread(open_youtube, query)
             return await asyncio.to_thread(open_youtube)
 

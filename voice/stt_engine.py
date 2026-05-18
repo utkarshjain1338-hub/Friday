@@ -28,9 +28,18 @@ class STTEngine:
             stdout, stderr = await proc.communicate()
             if stdout:
                 text = stdout.decode().strip()
+                # filter out non-speech tags from whisper like (dramatic music) or [Silence]
+                import re
+                text = re.sub(r'\[.*?\]', '', text)
+                text = re.sub(r'\(.*?\)', '', text)
+                text = re.sub(r'\*.*?\*', '', text)
+                text = text.strip()
                 from loguru import logger
-                logger.debug(f"STT Result: {text}")
-                return text
+                if text:
+                    logger.debug(f"STT Result: {text}")
+                    return text
+                else:
+                    return ""
         # fallback to asking the user
         loop = asyncio.get_running_loop()
         transcription = await loop.run_in_executor(None, input, "Transcription fallback - type your transcription: ")

@@ -1,0 +1,9 @@
+2026-05-18 09:54:44.098 | DEBUG    | voice.stt_engine:transcribe_file:32 - STT Result: (dramatic music)
+You said: (dramatic music)
+2026-05-18 09:54:44.098 | INFO     | core.assistant:handle_text:22 - Received command: (dramatic music)
+2026-05-18 09:54:44.347 | INFO     | core.router:route:369 - Using reasoning agent for request with system state context: [System Context: Active App='antigravity', Window Title='Friday - Antigravity - similarity_matcher.py', Workspace='2']
+2026-05-18 09:54:44.347 | INFO     | brain.reasoning_agent:reason_and_act:36 - Starting reasoning for: [System Context: Active App='antigravity', Window Title='Friday - Antigravity - similarity_matcher.py', Workspace='2'] (dramatic music)
+2026-05-18 09:54:44.347 | INFO     | brain.reasoning_agent:reason_and_act:46 - Reasoning iteration 1
+
+
+it also has issue that not every task it can do like if i say play this song on youtube then it just open youtube do nothing and didnt open any website i want , when i say mute volume it increase vloume 

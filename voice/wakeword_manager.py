@@ -38,7 +38,7 @@ class WakeWordManager:
         self.sample_rate = sample_rate
         self.stt = STTEngine()
         self.chunk_size = 1280          # 80 ms — openWakeWord's native chunk
-        self.rms_threshold = 0.10       # background noise peaks ~0.07; user speech ~0.15+
+        self.rms_threshold = 0.03       # lowered for better mic sensitivity
         self._oww_model = None
         # OWW doesn't have a native 'Hey Friday' model and triggers false positives.
         # Force fallback to the robust STT engine.

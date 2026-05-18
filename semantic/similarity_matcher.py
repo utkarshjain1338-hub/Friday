@@ -12,7 +12,8 @@ from loguru import logger
 INTENT_TEMPLATES: Dict[str, List[str]] = {
     "toggle_mute": [
         "mute", "unmute", "toggle sound", "turn off audio", "silent", 
-        "quiet down", "shutup", "mute system", "turn on sound", "sound off"
+        "quiet down", "shutup", "mute system", "turn on sound", "sound off",
+        "mute volume", "mute the volume"
     ],
     "volume_up": [
         "volume up", "louder", "turn it up", "can't hear", "increase sound", 
@@ -93,7 +94,7 @@ class SimilarityMatcher:
         import threading
         def _load_model():
             try:
-                from sentence_transformers import SentenceTransformer
+                from sentence_transformers import SentenceTransformer  # type: ignore
                 logger.info("SentenceTransformers installed. Loading 'all-MiniLM-L6-v2' in background...")
                 model = SentenceTransformer("all-MiniLM-L6-v2")
                 # Warm up model
