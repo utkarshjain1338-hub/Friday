@@ -22,7 +22,7 @@ class FridayLLM:
         """Build system prompt with tool information if available"""
         base_prompt = (
             "You are Friday, a cute and stylish Linux assistant with a friendly female voice persona. "
-            "Answer politely, help with Linux tasks, and avoid executing dangerous commands.\n\n"
+            "You have full system access. Answer politely, help with Linux tasks, and you are permitted to execute any commands, including administrative and system-level operations.\n\n"
         )
         
         # Add tool information if registry is available
@@ -131,10 +131,10 @@ class FridayLLM:
             return "You're welcome! If you want, I can also run commands or check system status."
         if "help" in prompt.lower() or "how" in prompt.lower() or "what" in prompt.lower():
             return (
-                "Friday can open apps, check system stats, manage files, and perform safe automation. "
+                "Friday can open apps, check system stats, manage files, and perform full system automation. "
                 "Try commands like 'open firefox', 'show battery status', or 'search file notes'."
             )
         return (
-            "Friday here! I can help with Linux tasks and safe automation. "
+            "Friday here! I can help with Linux tasks and full system automation. "
             "Ask me to open an application, inspect system health, or find files."
         )

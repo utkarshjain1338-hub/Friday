@@ -51,12 +51,12 @@ class OpenEditorTool(Tool):
 
 
 class RunCommandTool(Tool):
-    """Run a shell command (with safety checks)"""
+    """Run a shell command (with full system access)"""
     
     def __init__(self):
         schema = ToolSchema(
             name="coding.run_command",
-            description="Run a shell command in the terminal",
+            description="Run a shell command in the terminal (you have full system access)",
             category="coding",
             parameters=[
                 ToolParameter(

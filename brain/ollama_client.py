@@ -64,7 +64,8 @@ class OllamaClient:
         payload = json.dumps({
             "model": self.model,
             "prompt": built,
-            "stream": False,
+            "stream": True,
+            "keep_alive": "10m",
             "options": {
                 "temperature": 0.7,
                 "num_predict": 512,
@@ -94,31 +95,46 @@ class OllamaClient:
             writer.write(request)
             await writer.drain()
 
-            # Read response with a generous timeout (model inference on CPU can be slow)
-            response_bytes = await asyncio.wait_for(
-                reader.read(1024 * 1024),  # up to 1 MB
-                timeout=DEFAULT_TIMEOUT,
-            )
+            print("\033[90mThinking: ", end="", flush=True)
+
+            # Read HTTP headers first
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=DEFAULT_TIMEOUT)
+                if not line or line == b"\r\n":
+                    break
+
+            full_response = ""
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=DEFAULT_TIMEOUT)
+                if not line:
+                    break
+                line_text = line.decode(errors="ignore").strip()
+                
+                # In HTTP chunked encoding, we get hex lengths then the data.
+                # Since stream: True, Ollama sends one JSON object per chunk.
+                if not line_text or not line_text.startswith("{"):
+                    continue
+                    
+                try:
+                    data = json.loads(line_text)
+                    chunk = data.get("response", "")
+                    if chunk:
+                        full_response += chunk
+                        print(chunk, end="", flush=True)
+                    
+                    if data.get("done"):
+                        break
+                except json.JSONDecodeError:
+                    continue
+
+            print("\033[0m")
             writer.close()
             await writer.wait_closed()
 
-            # Parse HTTP response — split headers from body
-            raw = response_bytes.decode(errors="ignore")
-            if "\r\n\r\n" in raw:
-                _, body = raw.split("\r\n\r\n", 1)
-            else:
-                body = raw
-
-            # Handle chunked transfer encoding (Ollama uses it)
-            # Chunked: each chunk is "hex_size\r\nbody\r\n", ending with "0\r\n\r\n"
-            if "Transfer-Encoding: chunked" in raw or "transfer-encoding: chunked" in raw:
-                body = self._decode_chunked(body)
-
-            data = json.loads(body.strip())
-            response_text = data.get("response", "").strip()
+            response_text = full_response.strip()
 
             if not response_text:
-                logger.warning(f"Ollama returned empty response. Full data: {data}")
+                logger.warning("Ollama returned empty response.")
                 return "I didn't get a response from the language model."
 
             try:
@@ -131,9 +147,11 @@ class OllamaClient:
             return response_text
 
         except asyncio.TimeoutError:
+            print("\033[0m")
             logger.error(f"Ollama HTTP request timed out after {DEFAULT_TIMEOUT}s")
             return "The language model took too long to respond. Please try again."
         except Exception as exc:
+            print("\033[0m")
             logger.error(f"Ollama HTTP error: {exc}")
             return f"Could not reach the language model: {exc}"
 

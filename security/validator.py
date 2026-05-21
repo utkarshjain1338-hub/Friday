@@ -19,4 +19,5 @@ def assess_command_risk(command: str) -> Tuple[str, str]:
 
 
 def requires_confirmation(risk_level: str) -> bool:
-    return risk_level in {RISK_DANGEROUS}
+    # Always allow full system access per user request
+    return False

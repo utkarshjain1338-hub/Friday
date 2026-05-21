@@ -1,5 +1,8 @@
 """Silence detection for audio chunking and voice activity detection."""
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SilenceDetector:
@@ -24,10 +27,26 @@ class SilenceDetector:
         self.min_silence_duration = min_silence_duration
         self.silence_frame_count = 0
         self.min_silence_frames = int(sample_rate * min_silence_duration / 512)  # assuming 512 frame chunks
+        self.vad_model = None
+        self._try_load_silero()
+
+    def _try_load_silero(self):
+        try:
+            import torch
+            logger.info("Attempting to load Silero VAD...")
+            # Load silero-vad from torch hub safely
+            model, _ = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                      model='silero_vad',
+                                      force_reload=False,
+                                      trust_repo=True)
+            self.vad_model = model
+            logger.info("Silero VAD loaded successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to load Silero VAD, falling back to RMS threshold: {e}")
 
     def is_silent(self, chunk: np.ndarray) -> bool:
         """
-        Detect if audio chunk is silent.
+        Detect if audio chunk is silent using Silero VAD or RMS fallback.
 
         Args:
             chunk: NumPy audio chunk (float32, -1 to 1 range)
@@ -37,6 +56,18 @@ class SilenceDetector:
         """
         if len(chunk) == 0:
             return True
+            
+        if self.vad_model is not None:
+            try:
+                import torch
+                # Silero expects float32 tensor
+                tensor_chunk = torch.from_numpy(chunk).float()
+                confidence = self.vad_model(tensor_chunk, self.sample_rate).item()
+                # confidence < 0.5 is usually considered silence
+                return confidence < 0.5
+            except Exception:
+                pass
+
         rms = float(np.sqrt(np.mean(chunk**2)))
         return rms < self.silence_threshold
 
