@@ -1,0 +1,10 @@
+{
+    "ipc": {
+        "event_bus": "tcp://127.0.0.1:5555",
+        "protocol": "zmq"
+    },
+    "audio": {
+        "sample_rate": 16000,
+        "channels": 1
+    }
+}

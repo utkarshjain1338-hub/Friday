@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Friday Browser Intelligence",
+  "version": "1.0",
+  "description": "Browser intelligence layer for Friday",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "dist/background/index.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content/index.js"]
+    }
+  ]
+}

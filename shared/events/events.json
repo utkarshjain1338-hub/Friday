@@ -1,0 +1,11 @@
+{
+    "events": [
+        "USER_STARTED_SPEAKING",
+        "USER_STOPPED_SPEAKING",
+        "WINDOW_CHANGED",
+        "MUSIC_STARTED",
+        "MUSIC_PAUSED",
+        "WORKFLOW_TRIGGERED",
+        "SYSTEM_WAKE"
+    ]
+}

@@ -1,0 +1,562 @@
+FRIDAY v2 — Hybrid Cognitive Operating Architecture
+GOAL:
+Build a realtime, adaptive, local-first cognitive operating system
+instead of a chatbot assistant.
+CORE DESIGN PRINCIPLES
+1. Realtime First
+2. Event-Driven Everything
+3. Procedural Intelligence > Generative Intelligence
+4. Context Awareness Everywhere
+5. Local + Private
+6. Modular Pipelines
+7. Adaptive Learning
+8. Deterministic Core
+COMPLETE SYSTEM ARCHITECTURE
+                    ┌────────────────────────────┐
+                    │      USER INTERFACE        │
+                    │ Voice / Keyboard / GUI     │
+                    └────────────┬───────────────┘
+                                 │
+                     AUDIO / TEXT INPUT
+                                 │
+┌─────────────────────────────────────────────────────────────────┐
+│                 REALTIME CORE LAYER (RUST)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  • Wake Word Engine                                             │
+│  • Voice Activity Detection                                     │
+│  • Audio Stream Pipeline                                        │
+│  • Event Bus                                                    │
+│  • State Synchronization                                        │
+│  • Realtime Scheduler                                           │
+│  • Interrupt System                                             │
+│  • System Hooks                                                 │
+│                                                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                    STREAMED EVENTS
+                             │
+┌─────────────────────────────────────────────────────────────────┐
+│              COGNITIVE ORCHESTRATION LAYER (PYTHON)            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  • Assistant Orchestrator                                       │
+│  • Intent Router                                                │
+│  • Complexity Analyzer                                          │
+│  • Workflow Engine                                              │
+│  • Semantic Context Engine                                      │
+│  • Adaptive Learning Engine                                     │
+│  • Reflection & Recovery Engine                                 │
+│                                                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                    CONTEXTUALIZED TASKS
+                             │
+┌─────────────────────────────────────────────────────────────────┐
+│                 SEMANTIC INTELLIGENCE LAYER                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  • Embedding Engine                                             │
+│  • Intent Similarity Matching                                   │
+│  • Semantic Memory                                              │
+│  • Vector Search                                                │
+│  • User Vocabulary Learning                                     │
+│  • Contextual Meaning Mapper                                    │
+│                                                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                   ROUTED ACTION INTENTS
+                             │
+         ┌───────────────────┼────────────────────┐
+         │                   │                    │
+         ▼                   ▼                    ▼
+
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  REFLEX ENGINE  │ │ PROCEDURAL CORE │ │ OPTIONAL REASON │
+│   (RUST)        │ │    (PYTHON)     │ │  ENGINE (LOCAL) │
+├─────────────────┤ ├─────────────────┤ ├─────────────────┤
+│ volume           │ browser control   │ only if needed   │
+│ brightness       │ app workflows     │ explanations      │
+│ media controls   │ coding sessions   │ deep questions    │
+│ workspace switch │ automation        │ planning           │
+│ screenshots      │ messaging         │ ambiguous tasks    │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+
+                             │
+                             ▼
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    EXECUTION LAYER                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  • Linux System Control                                         │
+│  • Browser Automation                                           │
+│  • Desktop Automation                                           │
+│  • Process Management                                           │
+│  • Notification Control                                         │
+│  • File System Actions                                          │
+│                                                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+                   SYSTEM / APPS / BROWSER
+LANGUAGE DISTRIBUTION
+Layer	Language	Why
+Realtime Core	Rust	speed + concurrency
+Semantic Layer	Python	ML ecosystem
+Orchestrator	Python	flexibility
+Browser Layer	TypeScript	DOM control
+Reflex Layer	Rust	ultra-low latency
+Automation	Python	automation libraries
+GUI Overlay	Tauri/Rust	lightweight native UI
+Extensions	TypeScript	browser integration
+MODULE BREAKDOWN
+1. REALTIME CORE (RUST)
+Purpose
+
+Everything latency-sensitive.
+
+Responsibilities
+wake word
+VAD
+audio streaming
+interrupts
+event queue
+realtime scheduling
+state synchronization
+Why Rust
+Python struggles with high-frequency realtime pipelines.
+
+Rust gives:
+
+deterministic performance
+memory safety
+async concurrency
+near-C speed
+2. EVENT BUS (VERY IMPORTANT)
+Purpose
+
+All modules communicate through events.
+
+Example
+USER_STARTED_SPEAKING
+WINDOW_CHANGED
+MUSIC_STARTED
+WORKFLOW_TRIGGERED
+Recommended
+Tokio channels
+ZeroMQ
+NATS
+Redis pub/sub
+3. SEMANTIC INTELLIGENCE LAYER
+Purpose
+
+Understand meaning WITHOUT LLMs.
+
+Components
+Embedding Engine
+
+Converts phrases into semantic vectors.
+
+Intent Similarity Matching
+
+Maps:
+
+“I need focus”
+“too distracted”
+“music is noisy”
+
+→ same intent cluster.
+
+User Vocabulary Learning
+
+Learns custom meanings over time.
+
+Recommended Models
+MiniLM
+BGE-small
+sentence-transformers
+4. PROCEDURAL INTELLIGENCE CORE
+THIS IS THE HEART OF FRIDAY
+
+Instead of reasoning:
+
+execute learned workflows.
+Example
+coding_mode()
+
+runs:
+
+VSCode
+terminal
+Spotify
+workspace layout
+restore tabs
+Workflow Categories
+Category	Examples
+Productivity	coding mode
+Media	movie mode
+Communication	messaging
+Research	study mode
+System	maintenance
+Browser	automation
+5. SYSTEM STATE ENGINE
+Purpose
+
+Maintain continuous awareness.
+
+Tracks
+active app
+focused window
+browser tab
+media state
+clipboard
+notifications
+workspaces
+CPU/RAM usage
+Why Important
+
+Enables contextual intelligence.
+
+Example:
+
+“Pause this.”
+
+No reasoning needed.
+State engine already knows current media source.
+
+6. ADAPTIVE LEARNING ENGINE
+Purpose
+
+Learn user behavior over time.
+
+Learns
+routines
+timing
+workflows
+app sequences
+preferences
+repeated actions
+Example
+VSCode + terminal + Spotify
+= coding session
+
+Eventually becomes predictive.
+
+7. MEMORY SYSTEM
+Memory Types
+Semantic Memory
+
+Stores:
+
+meanings
+preferences
+associations
+Episodic Memory
+
+Stores:
+
+interaction history
+workflows
+task context
+Procedural Memory
+
+Stores:
+
+learned automation sequences
+reusable actions
+Recommended Stack
+Component	Tech
+Fast local DB	SQLite
+Vector memory	ChromaDB
+Graph memory	Neo4j
+8. BROWSER INTELLIGENCE LAYER
+Language
+
+TypeScript
+
+Responsibilities
+DOM analysis
+webpage context
+tab tracking
+media control
+form automation
+smart browsing
+Why TS
+
+Browser APIs are native to JS ecosystem.
+
+9. REFLECTION & RECOVERY ENGINE
+Purpose
+
+Handle failures intelligently.
+
+Example
+
+If browser action fails:
+
+retry
+inspect DOM again
+re-locate elements
+fallback workflow
+10. PERSONALITY ENGINE
+Purpose
+
+Make interaction human-like WITHOUT LLM.
+
+Features
+contextual phrases
+emotional tone
+speech pacing
+interruption handling
+adaptive greetings
+Example
+
+Instead of:
+
+Opening Firefox.
+
+Use:
+
+Sure… opening Firefox now.
+SPEED TARGETS
+Layer	Target
+Wake Word	<100ms
+VAD	<50ms
+Reflex Actions	10–50ms
+Semantic Match	<200ms
+Workflow Trigger	<500ms
+Voice Start	<1s
+IDEAL PROJECT STRUCTURE
+friday/
+│
+├── rust-core/
+│   ├── audio/
+│   ├── wakeword/
+│   ├── eventbus/
+│   ├── scheduler/
+│   ├── reflex/
+│   └── state/
+│
+├── python-core/
+│   ├── orchestrator/
+│   ├── semantics/
+│   ├── workflows/
+│   ├── memory/
+│   ├── learning/
+│   ├── automation/
+│   └── recovery/
+│
+├── browser-extension/
+│   ├── content/
+│   ├── background/
+│   └── context/
+│
+├── ui/
+│   ├── overlay/
+│   ├── voice/
+│   └── dashboard/
+│
+└── shared/
+    ├── schemas/
+    ├── events/
+    └── configs/
+LONG-TERM EVOLUTION
+PHASE 1
+
+Build:
+
+realtime infrastructure
+reflex engine
+procedural workflows
+
+PHASE 2
+
+BEST IMPLEMENTATION STRATEGY
+STEP 1 — Embedding Engine
+
+Use:
+
+MiniLM
+BGE-small
+
+Recommended:
+
+all-MiniLM-L6-v2
+
+Why?
+
+lightweight
+fast
+excellent semantic similarity
+CPU friendly
+Suggested Structure
+python-core/semantics/
+ ├── embeddings.py
+ ├── matcher.py
+ ├── mapper.py
+ ├── intent_registry.py
+ └── semantic_memory.py
+STEP 2 — Intent Registry
+
+VERY IMPORTANT.
+
+Define canonical workflow intents.
+
+Example:
+
+{
+  "coding_mode": [
+    "start coding",
+    "open development setup",
+    "prepare workspace",
+    "i want to code"
+  ],
+  "focus_mode": [
+    "too distracted",
+    "need focus",
+    "help me concentrate"
+  ]
+}
+STEP 3 — Semantic Similarity Matching
+
+Flow:
+
+user utterance
+    ↓
+embedding vector
+    ↓
+cosine similarity
+    ↓
+nearest workflow intent
+
+This is the core intelligence layer.
+
+STEP 4 — Contextual Meaning Mapper
+
+THIS is where Friday becomes smart.
+
+Example:
+
+User says:
+
+“Pause this.”
+
+Without context:
+
+ambiguous
+
+With context:
+
+active YouTube tab
+Spotify playing
+
+Meaning becomes obvious.
+
+THIS LAYER SHOULD ACCESS
+current app
+browser tab
+media state
+active workflow
+workspace state
+previous intent
+
+This is EXTREMELY important.
+
+IMPORTANT INSIGHT
+
+Semantic intelligence becomes powerful ONLY when combined with:
+
+context awareness
+
+Without context:
+
+embeddings alone are limited.
+STEP 5 — Intent Confidence Thresholds
+
+CRITICAL.
+
+Do NOT always execute.
+
+Example:
+
+similarity > 0.85 → auto execute
+0.65–0.85 → ask confirmation
+<0.65 → fallback handling
+
+This massively improves reliability.
+
+STEP 6 — Adaptive Semantic Learning
+
+Over time:
+
+store new phrases
+learn user vocabulary
+expand intent clusters
+
+Example:
+
+You repeatedly say:
+
+“lock in mode”
+
+Eventually Friday learns:
+
+“focus_mode”
+
+This is how personalization emerges.
+
+IMPORTANT ENGINEERING ADVICE
+
+DO NOT use:
+
+giant intent trees
+endless regex
+huge keyword maps
+
+Use:
+
+embeddings
+similarity clusters
+semantic memory
+
+This scales MUCH better.
+
+NEXT MASSIVE MILESTONE AFTER THIS
+
+After semantic layer:
+
+Build:
+
+System State Engine
+
+because semantic intelligence WITHOUT state awareness is incomplete.
+PHASE 3
+
+Add:
+
+adaptive learning
+predictive workflows
+personalized automation
+PHASE 4
+
+Add:
+
+proactive assistance
+autonomous optimization
+advanced recovery
+FINAL VISION
+
+FRIDAY becomes:
+
+A Local Adaptive Cognitive Operating Layer
+
+NOT:
+
+a chatbot
+an API wrapper
+a simple voice assistant
+
+But:
+
+a realtime intelligent operating companion.

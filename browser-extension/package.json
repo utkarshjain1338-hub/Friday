@@ -1,0 +1,13 @@
+{
+  "name": "friday-browser-intelligence",
+  "version": "1.0.0",
+  "description": "Browser intelligence layer for Friday",
+  "main": "background/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.42",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "friday-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.34", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1.74"
+cpal = "0.15.2"
+ringbuf = "0.3.3"
+
+[workspace]
+members = [
+    ".",
+]

@@ -49,6 +49,20 @@ class SystemControls:
         success, err = await self._run_command([self.wpctl_path, "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
         return "Audio toggled." if success else f"Failed to toggle audio: {err}"
 
+    async def mute(self) -> str:
+        """Mute system."""
+        if not self.wpctl_path:
+            return "Volume control is unavailable because wpctl is not installed."
+        success, err = await self._run_command([self.wpctl_path, "set-mute", "@DEFAULT_AUDIO_SINK@", "1"])
+        return "Audio muted." if success else f"Failed to mute audio: {err}"
+
+    async def unmute(self) -> str:
+        """Unmute system."""
+        if not self.wpctl_path:
+            return "Volume control is unavailable because wpctl is not installed."
+        success, err = await self._run_command([self.wpctl_path, "set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+        return "Audio unmuted." if success else f"Failed to unmute audio: {err}"
+
     async def volume_up(self) -> str:
         """Increase volume by 5%."""
         if not self.wpctl_path:

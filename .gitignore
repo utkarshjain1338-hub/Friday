@@ -9,3 +9,22 @@ bin/whisper-cli
 bin/lib*
 *.db
 voices/*.onnx
+
+# Rust build artifacts
+rust-core/target/
+**/*.rs.bk
+
+# Node/Browser Extension artifacts
+node_modules/
+dist/
+browser-extension/dist/
+browser-extension/node_modules/
+
+# Python generated memory
+*.json
+!shared/events/events.json
+!browser-extension/manifest.json
+!browser-extension/package.json
+!browser-extension/tsconfig.json
+!shared/configs/*.json
+
