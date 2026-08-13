@@ -24,7 +24,7 @@ trap cleanup SIGINT SIGTERM
 
 # Source cargo and venv environments
 source $HOME/.cargo/env 2>/dev/null || true
-source venv/bin/activate 2>/dev/null || true
+source .venv/bin/activate 2>/dev/null || source venv/bin/activate 2>/dev/null || true
 
 # 1. Start the Rust Core (EventBus, State Sync, Audio, Reflex)
 echo "Starting Rust Realtime Core..."

@@ -4,8 +4,23 @@ import os
 import sys
 from pathlib import Path
 
+# ── Package resolution ─────────────────────────────────────────────────────
+# All subpackages (automation, memory, learning, workflows, intelligence,
+# semantics) live under python-core/.  The orchestrator layer (core.*) lives
+# under python-core/orchestrator/.  Add both to sys.path so every import
+# works from whichever entry point is used.
+_project_root = Path(__file__).parent
+_python_core  = _project_root / "python-core"
+_orchestrator = _python_core / "orchestrator"
+
+for _p in (_project_root, _python_core, _orchestrator):
+    _p_str = str(_p)
+    if _p_str not in sys.path:
+        sys.path.insert(0, _p_str)
+# ───────────────────────────────────────────────────────────────────────────
+
 # Add local bin to PATH
-local_bin = Path(__file__).parent / "bin"
+local_bin = _project_root / "bin"
 os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
 
 from ui.cli import run_cli, run_voice_mode

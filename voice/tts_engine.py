@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from loguru import logger
 
 
@@ -19,7 +21,23 @@ class TTSEngine:
             volume: volume for pyttsx3 (0.0 - 1.0)
             default_piper_voice: preferred piper voice when available
         """
+        self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.piper_lib_path = os.path.join(self.project_root, "third_party", "piper")
+        self.piper_models_dirs = [
+            os.path.join(self.project_root, "voices"),
+            os.path.join(self.project_root, "voice"),
+            os.path.join(str(Path.home()), ".local", "share", "piper"),
+            os.path.join(str(Path.home()), ".piper"),
+        ]
         self.piper_binary = piper_binary or shutil.which("piper")
+        if not self.piper_binary:
+            local_piper = os.path.join(self.project_root, ".venv", "bin", "piper")
+            if os.path.exists(local_piper):
+                self.piper_binary = local_piper
+        if not self.piper_binary:
+            local_piper = os.path.join(self.project_root, "bin", "piper")
+            if os.path.exists(local_piper):
+                self.piper_binary = local_piper
         self.fallback = fallback
         self.preferred_voice = preferred_voice or "female"
         self.default_piper_voice = default_piper_voice
@@ -27,16 +45,9 @@ class TTSEngine:
         self.volume = volume
         self._pytt_engine = None
         self._proc = None
-        
-        # Determine project root and library paths
-        self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.piper_lib_path = os.path.join(self.project_root, "third_party", "piper")
-        self.piper_models_dir = os.path.join(self.project_root, "voices")
-
-        if not self.piper_binary:
-            local_piper = os.path.join(self.project_root, "bin", "piper")
-            if os.path.exists(local_piper):
-                self.piper_binary = local_piper
+        self.piper_config_path = None
+        self.piper_model_path = None
+        self._resolve_piper_model(self.default_piper_voice)
 
         if self.fallback:
             try:
@@ -83,7 +94,78 @@ class TTSEngine:
 
                 self._pytt_engine = engine
             except Exception as exc:
-                logging.warning("pyttsx3 not available: %s", exc)
+                logger.warning("pyttsx3 not available (eSpeak/espeak-ng may not be installed): %s", exc)
+
+    def _resolve_piper_model(self, voice_name: str):
+        self.piper_model_path = None
+        self.piper_config_path = None
+        voice_name = (voice_name or self.default_piper_voice).lower()
+        aliases = {voice_name}
+        if "cori" in voice_name:
+            aliases.update({"cori-high", "cori-medium", "en_gb-cori-medium", "en-gb-cori-medium", "en_gb-cori-high", "en-gb-cori-high"})
+        if voice_name == "cori-high":
+            aliases.update({"en_gb-cori-medium", "en-gb-cori-medium", "cori-medium"})
+
+        for model_dir in self.piper_models_dirs:
+            if not model_dir or not os.path.isdir(model_dir):
+                continue
+            for root, _, files in os.walk(model_dir):
+                if not os.path.isdir(root):
+                    continue
+                for filename in files:
+                    lower = filename.lower()
+                    base = os.path.splitext(filename)[0].lower()
+                    if lower.endswith(".onnx"):
+                        for alias in aliases:
+                            alias_l = alias.lower()
+                            if base == alias_l or base.startswith(f"{alias_l}-") or alias_l.startswith(f"{base}-"):
+                                self.piper_model_path = os.path.join(root, filename)
+                                break
+                        if self.piper_model_path:
+                            break
+                    if lower.endswith(".onnx.json"):
+                        for alias in aliases:
+                            alias_l = alias.lower()
+                            if base == alias_l or base.startswith(f"{alias_l}-") or alias_l.startswith(f"{base}-"):
+                                self.piper_config_path = os.path.join(root, filename)
+                                break
+                    if self.piper_model_path and self.piper_config_path:
+                        break
+                if self.piper_model_path and self.piper_config_path:
+                    break
+            if self.piper_model_path and self.piper_config_path:
+                break
+
+        if self.piper_model_path is None:
+            for model_dir in self.piper_models_dirs:
+                if not os.path.isdir(model_dir):
+                    continue
+                for candidate in sorted(Path(model_dir).rglob("*.onnx")):
+                    label = candidate.stem.lower()
+                    if "cori" in label:
+                        self.piper_model_path = str(candidate)
+                        break
+                if self.piper_model_path:
+                    break
+
+        if self.piper_config_path is None and self.piper_model_path:
+            base = os.path.splitext(self.piper_model_path)[0]
+            for candidate in [base + ".onnx.json", base + ".json"]:
+                if os.path.exists(candidate):
+                    self.piper_config_path = candidate
+                    break
+            if self.piper_config_path is None:
+                for model_dir in self.piper_models_dirs:
+                    candidate = os.path.join(model_dir, os.path.basename(base) + ".onnx.json")
+                    if os.path.exists(candidate):
+                        self.piper_config_path = candidate
+                        break
+
+        if self.piper_model_path:
+            logger.info("Resolved Piper model: %s", self.piper_model_path)
+        else:
+            logger.warning("No local Piper model found for voice '%s' in %s", voice_name, self.piper_models_dirs)
+        return self.piper_model_path
 
     async def speak(self, text: str, voice: str = None):
         """Speak text using Piper or fallback to pyttsx3."""
@@ -91,56 +173,50 @@ class TTSEngine:
             logger.debug("speak() called with empty/None text — skipping")
             return
         text = str(text)
-        
+
+        piper_voice = voice or os.getenv("PIPER_VOICE") or self.default_piper_voice
+        self._resolve_piper_model(piper_voice)
+
         # 1. Try Piper if available and looks configured
-        if self.piper_binary:
-            piper_voice = voice or os.getenv("PIPER_VOICE") or self.default_piper_voice
-            # Look for model in voices/ directory: <voice>.onnx
-            model_path = os.path.join(self.piper_models_dir, f"{piper_voice}.onnx")
-            
+        if self.piper_binary and self.piper_model_path:
+            model_path = self.piper_model_path
+            config_path = self.piper_config_path or os.path.splitext(model_path)[0] + ".onnx.json"
+
             logger.debug(f"Piper binary: {self.piper_binary}")
-            logger.debug(f"Piper models dir: {self.piper_models_dir}")
-            logger.debug(f"Checking for Piper model at {model_path}")
-            
-            if os.path.exists(model_path):
-                logger.info(f"Using Piper voice: {piper_voice}")
+            logger.debug(f"Piper model: {model_path}")
+            logger.debug(f"Piper config: {config_path}")
+
+            if os.path.exists(model_path) and os.path.exists(config_path):
+                logger.info(f"Using Piper voice: {piper_voice} -> {model_path}")
                 loop = asyncio.get_running_loop()
-                
+
                 def _run_piper():
                     try:
-                        # Prepare environment with libraries
                         env = os.environ.copy()
-                        env["LD_LIBRARY_PATH"] = f"{self.piper_lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
-                        
-                        # Check if it's likely a wrapper or the official binary
-                        is_official = True
-                        try:
-                            help_out = subprocess.check_output([self.piper_binary, "--help"], stderr=subprocess.STDOUT, env=env, text=True).lower()
-                            # Official piper has --model and --config
-                            is_official = "--model" in help_out and "--config" in help_out
-                            # If it explicitly has a 'speak' command, it's a wrapper
-                            if "speak" in help_out.split():
-                                is_official = False
-                            
-                            logger.debug(f"Piper binary detected as {'official' if is_official else 'wrapper'}")
-                        except Exception as e:
-                            logger.debug(f"Could not determine Piper type: {e}")
-                            pass
+                        if os.path.isdir(self.piper_lib_path):
+                            env["LD_LIBRARY_PATH"] = f"{self.piper_lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
 
-                        if not is_official:
-                            logger.debug("Using Piper wrapper (speak subcommand)")
-                            args = [self.piper_binary, "speak", "--voice", str(piper_voice), text]
-                            self._proc = subprocess.Popen(args, env=env)
-                            return self._proc.wait() == 0
-                        else:
-                            logger.debug(f"Using official Piper binary pipeline with model: {model_path}")
-                            # Use official piper pipeline
-                            # piper -m model -f - | aplay
-                            # Escape double quotes and backslashes in text
-                            safe_text = text.replace('\\', '\\\\').replace('"', '\\"')
-                            cmd = f'echo "{safe_text}" | LD_LIBRARY_PATH="{self.piper_lib_path}" "{self.piper_binary}" -m "{model_path}" -f - | aplay -q'
-                            logger.debug(f"Running command: {cmd}")
-                            return subprocess.call(cmd, shell=True, env=env) == 0
+                        safe_text = text.replace('\\', '\\\\').replace('"', '\\"')
+                        wav_path = os.path.join(self.project_root, "tmp_friday_speech.wav")
+                        cmd = [
+                            self.piper_binary,
+                            "-m", model_path,
+                            "-c", config_path,
+                            "-f", wav_path,
+                        ]
+                        logger.debug(f"Running Piper command: {cmd}")
+                        proc = subprocess.run(cmd, input=safe_text, text=True, capture_output=True, env=env)
+                        if proc.returncode != 0:
+                            logger.error("Piper failed: %s", proc.stderr)
+                            return False
+                        if os.path.exists(wav_path):
+                            if shutil.which("paplay"):
+                                return subprocess.run(["paplay", wav_path], env=env, capture_output=True, text=True).returncode == 0
+                            if shutil.which("aplay"):
+                                return subprocess.run(["aplay", "-q", wav_path], env=env, capture_output=True, text=True).returncode == 0
+                            if shutil.which("ffplay"):
+                                return subprocess.run(["ffplay", "-nodisp", "-autoexit", "-hide_banner", wav_path], env=env, capture_output=True, text=True).returncode == 0
+                        return True
                     except Exception as e:
                         logger.error(f"Piper execution failed: {e}")
                         return False
@@ -152,7 +228,7 @@ class TTSEngine:
                     return
                 logger.warning("Piper failed, falling back to pyttsx3")
             else:
-                logger.debug(f"Piper model not found: {model_path}")
+                logger.debug(f"Piper model/config not found for {piper_voice}. model={self.piper_model_path} config={config_path}")
 
         # 2. Fallback to pyttsx3 if Piper skipped or failed
         if self._pytt_engine:

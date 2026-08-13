@@ -88,9 +88,17 @@ class FridayRouter:
         logger.info("Router initialized with config, tool system, and enhanced memory.")
 
     def _load_config(self):
-        path = Path(__file__).parent.parent / "config" / "commands.yaml"
+        # __file__ = python-core/orchestrator/router.py
+        # parent          → python-core/orchestrator/
+        # parent.parent   → python-core/
+        # parent.parent.parent → Friday/  (project root, where config/ lives)
+        path = Path(__file__).parent.parent.parent / "config" / "commands.yaml"
+        if not path.exists():
+            logger.warning("commands.yaml not found at %s — safe_commands will be empty", path)
+            return {"safe_commands": {}}
         with open(path, "r", encoding="utf-8") as handle:
-            return yaml.safe_load(handle)
+            return yaml.safe_load(handle) or {"safe_commands": {}}
+
 
     async def route(self, text: str) -> str:
         import datetime as _dt
@@ -128,15 +136,33 @@ class FridayRouter:
         # GATE 1: REFLEX LAYER (0ms execution Wayland Native)
         # ----------------------------------------------------------------
         # Volume controls
-        if any(p in normalized for p in ["toggle mute", "toggle sound"]):
-            return await self.system_controls.toggle_mute()
-        if any(p in normalized for p in ["mute system", "mute volume", "mute the volume"]) or normalized == "mute":
-            return await self.system_controls.mute()
-        if any(p in normalized for p in ["unmute system", "unmute volume", "unmute the volume"]) or normalized == "unmute":
+        # ── Explicit MUTE / UNMUTE first (more specific than toggle) ──────
+        _unmute_phrases = [
+            "unmute system", "unmute volume", "unmute the volume", "unmute audio",
+            "turn on sound", "turn sound on", "restore volume", "restore sound",
+        ]
+        _mute_phrases = [
+            "mute system", "mute volume", "mute the volume", "mute audio",
+            "silence the audio", "silence the volume", "silence system",
+            "turn off sound", "turn sound off", "no sound",
+        ]
+        _has_mute_word   = (
+            (normalized in {"mute", "silence"} or normalized.startswith(("mute ", "silence ")) or " mute" in normalized)
+            and "toggle" not in normalized   # 'toggle mute' must reach the toggle handler below
+        )
+        _has_unmute_word = normalized in {"unmute"} or normalized.startswith("unmute ")
+
+
+        if any(p in normalized for p in _unmute_phrases) or _has_unmute_word:
             return await self.system_controls.unmute()
-        if any(p in normalized for p in ["volume up", "raise volume", "increase volume", "louder"]):
+        if any(p in normalized for p in _mute_phrases) or _has_mute_word:
+            return await self.system_controls.mute()
+        # Toggle is a fallback only — only fires when the word 'toggle' is explicitly present
+        if any(p in normalized for p in ["toggle mute", "toggle sound", "toggle audio"]):
+            return await self.system_controls.toggle_mute()
+        if any(p in normalized for p in ["volume up", "raise volume", "increase volume", "louder", "turn it up", "turn up volume"]):
             return await self.system_controls.volume_up()
-        if any(p in normalized for p in ["volume down", "lower volume", "decrease volume", "quieter"]):
+        if any(p in normalized for p in ["volume down", "lower volume", "decrease volume", "quieter", "turn it down", "turn down volume"]):
             return await self.system_controls.volume_down()
 
         # Media controls
@@ -195,13 +221,20 @@ class FridayRouter:
         # ----------------------------------------------------------------
         # GATE 2: SEMANTIC LAYER (100ms execution NLP similarity matcher)
         # ----------------------------------------------------------------
+        # Guard: don't run semantic matching on queries that are clearly
+        # browser/media commands — let them fall through to the explicit
+        # handler block below.
+        _is_browser_query = any(
+            kw in normalized
+            for kw in ["youtube", "google", "open ", "search ", "website", "browser"]
+        )
         intent, confidence = self.similarity_matcher.match_intent(text)
-        if intent and confidence >= 0.4:
+        if intent and confidence >= 0.4 and not (_is_browser_query and intent == "media_play_pause"):
             logger.info(f"Matched semantic intent '{intent}' with confidence {confidence:.2f} for query '{text}'")
             if intent == "toggle_mute":
                 if "unmute" in normalized:
                     return await self.system_controls.unmute()
-                elif "mute" in normalized:
+                elif "mute" in normalized or "silence" in normalized:
                     return await self.system_controls.mute()
                 else:
                     return await self.system_controls.toggle_mute()
@@ -291,29 +324,49 @@ class FridayRouter:
             return await asyncio.to_thread(search_google, query)
 
         if "youtube" in normalized:
+            import re
             query = ""
             play = False
-            if "search youtube for " in normalized:
-                query = self._extract_parameter(normalized, "search youtube for ")
-            elif "search youtube " in normalized:
-                query = self._extract_parameter(normalized, "search youtube ")
-            elif "play " in normalized and " on youtube" in normalized:
-                query = normalized.split("play ")[1].split(" on youtube")[0].strip()
+            
+            # Strip common prefixes
+            text = normalized
+            for p in ["can you ", "please ", "could you "]:
+                if text.startswith(p):
+                    text = text[len(p):]
+                    
+            if "search youtube for " in text:
+                query = text.split("search youtube for ")[1].strip()
+            elif "search youtube " in text:
+                query = text.split("search youtube ")[1].strip()
+            elif "play " in text and " on youtube" in text:
+                query = text.split("play ")[1].split(" on youtube")[0].strip()
                 play = True
-            elif "search " in normalized and " on youtube" in normalized:
-                query = normalized.split("search ")[1].split(" on youtube")[0].strip()
-            elif " on youtube" in normalized:
-                parts = normalized.split(" on youtube")
+            elif "search " in text and " on youtube" in text:
+                query = text.split("search ")[1].split(" on youtube")[0].strip()
+            elif " on youtube" in text:
+                parts = text.split(" on youtube")
                 if parts[0]:
                     query = parts[0].strip()
-                    if "play" in normalized:
+                    if query.startswith("play "):
+                        query = query[5:].strip()
                         play = True
-            elif "search" in normalized:
-                query = self._extract_parameter(normalized, "search youtube")
+            elif "play " in text and "youtube" in text:
+                q = text.replace("youtube", "").replace("play", "").strip()
+                q = re.sub(r"\bon\b", "", q).strip()
+                query = q
+                play = True
+            elif "youtube" in text:
+                q = text.replace("youtube", "").replace("open", "").strip()
+                if q:
+                    if q.startswith("search "):
+                        query = q[7:].strip()
+                    else:
+                        query = q
             
             if query:
                 return await asyncio.to_thread(open_youtube, query, play)
             return await asyncio.to_thread(open_youtube)
+
 
         if self.no_llm_mode:
             return await self._route_without_llm(text, normalized)

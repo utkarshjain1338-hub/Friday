@@ -223,8 +223,14 @@ class WakeWordManager:
         # Also filter '[inaudible]' anywhere in short transcriptions
         if re.search(r'\[\s*inaudible\s*\]', stripped, re.IGNORECASE):
             return True
-        if len(stripped.split()) < 2:
-            return True
+
+        words = stripped.split()
+        if len(words) < 2:
+            # Single-word transcriptions like 'friday' or 'computer' are valid wake phrases.
+            # Only reject single-word ambient noise like '(music)' or '[noise]' after stripping.
+            if stripped.lower() in {"music", "noise", "silence", "inaudible"}:
+                return True
+            return False
         return False
 
     async def _wait_for_stt_wake_word(self) -> bool:
